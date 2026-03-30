@@ -1,0 +1,729 @@
+# =============================================================================
+# Mower Package - Dave III (Mammotion Luba)
+# Helpers, template sensors, and automations in a single package file.
+# =============================================================================
+#
+# SETUP: Add to configuration.yaml as a package:
+#   homeassistant:
+#     packages:
+#       mower: !include mower/mower_helpers.yaml
+#
+# Keep automation: !include automations.yaml in configuration.yaml as normal.
+# HA merges the automation: list from this package automatically.
+#
+# WIND SPEED: Thresholds assume mph. 4.5 mph ≈ 2 m/s (light breeze).
+# SOIL MOISTURE: sensor.gw2000a_soil_moisture_3 — blocks mowing above 70%.
+#
+# SCHEDULE: Edit the weekday lists in automations 1, 2 & 15.
+#   Python weekdays: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
+#   Default: Tuesday(1), Thursday(3), Sunday(6)
+#
+# MOW TIME: Change "at: '09:30:00'" in automation 1 and the hour/minute
+#   values in automations 2 and 14.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# INPUT HELPERS
+# -----------------------------------------------------------------------------
+input_boolean:
+  mower_holiday_mode:
+    name: "Mower - Holiday Mode"
+    icon: mdi:airplane
+
+  mower_calendar_mow_requested:
+    name: "Mower - Calendar Mow Requested"
+    icon: mdi:calendar-check
+
+input_button:
+  mower_mow_now:
+    name: "Mower - Mow Now"
+    icon: mdi:play-circle-outline
+
+  mower_can_i_mow:
+    name: "Mower - Can I Mow?"
+    icon: mdi:help-circle-outline
+
+input_datetime:
+  mower_last_completed:
+    name: "Mower - Last Completed"
+    has_date: true
+    has_time: true
+
+  mower_started_at:
+    name: "Mower - Started At"
+    has_date: true
+    has_time: true
+
+  mower_last_rain:
+    name: "Mower - Last Rain"
+    has_date: true
+    has_time: true
+
+input_text:
+  mower_calendar_event_time:
+    name: "Mower - Calendar Event Time"
+    max: 255
+
+  mower_scheduled_event_time:
+    name: "Mower - Scheduled Event Time"
+    max: 25
+
+
+# -----------------------------------------------------------------------------
+# TEMPLATE SENSORS
+# -----------------------------------------------------------------------------
+template:
+  - binary_sensor:
+      - name: "Mower OK to Mow"
+        unique_id: mower_ok_to_mow
+        icon: >
+          {{ 'mdi:robot-mower' if this.state == 'on' else 'mdi:robot-mower-outline' }}
+        state: >
+          {# --- Rain checks (local weather station) --- #}
+          {% set not_raining   = is_state('binary_sensor.gw2000a_rain_state_piezo', 'off') %}
+          {% set low_rain_rate = states('sensor.gw2000a_hourly_rain_rate_piezo') | float(0) < 0.5 %}
+
+          {# --- Forecast check (Met Office) --- #}
+          {% set low_precip_prob = states('sensor.mower_rain_probability') | int(100) < 50 %}
+
+          {# --- Sun position --- #}
+          {% set sun_up = states('sensor.sun_solar_elevation') | float(0) > 5 %}
+
+          {# --- Drying conditions: sun OR wind is enough, plus low humidity --- #}
+          {% set solar_ok  = states('sensor.gw2000a_solar_radiation') | float(0) > 100 %}
+          {% set wind_ok   = states('sensor.gw2000a_wind_speed') | float(0) > 4.5 %}
+          {% set low_humid = states('sensor.gw2000a_humidity') | float(100) < 88 %}
+          {% set drying_ok = (solar_ok or wind_ok) and low_humid %}
+
+          {# --- Soil moisture --- #}
+          {% set soil_ok = states('sensor.gw2000a_soil_moisture_3') | float(100) < 70 %}
+
+          {# --- Post-rain lockout (2 hours after last rain) --- #}
+          {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
+          {% set post_rain_ok = last_rain_ts == 0 or (now().timestamp() - last_rain_ts) > 7200 %}
+
+          {# --- Mower battery --- #}
+          {% set battery_ok = states('sensor.dave_iii_battery') | int(0) > 20 %}
+
+          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and sun_up and drying_ok and soil_ok and battery_ok }}
+
+  - sensor:
+      - name: "Mower Block Reason"
+        unique_id: mower_block_reason
+        icon: mdi:information-outline
+        state: >
+          {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
+          {% set mins_since_rain = ((now().timestamp() - last_rain_ts) / 60) | int if last_rain_ts > 0 else 999 %}
+          {% set dry_at = (last_rain_ts + 7200) | timestamp_custom('%H:%M') if last_rain_ts > 0 else '' %}
+          {% if is_state('binary_sensor.gw2000a_rain_state_piezo', 'on') %}
+            Raining now
+          {% elif last_rain_ts > 0 and mins_since_rain < 120 %}
+            Post-rain lockout — {{ mins_since_rain }} min ago, dry by {{ dry_at }}
+          {% elif states('sensor.gw2000a_hourly_rain_rate_piezo') | float(0) >= 0.5 %}
+            Recent rain ({{ states('sensor.gw2000a_hourly_rain_rate_piezo') | float(0) | round(1) }} mm/h) — drying
+          {% elif states('sensor.mower_rain_probability') | int(100) >= 50 %}
+            Rain forecast — {{ states('sensor.mower_rain_probability') }}% chance
+          {% elif states('sensor.sun_solar_elevation') | float(0) <= 5 %}
+            Sun too low ({{ states('sensor.sun_solar_elevation') | float(0) | round(1) }}°)
+          {% elif not (states('sensor.gw2000a_solar_radiation') | float(0) > 100 or states('sensor.gw2000a_wind_speed') | float(0) > 4.5) %}
+            Poor drying — solar {{ states('sensor.gw2000a_solar_radiation') | float(0) | round(0) }} W/m², wind {{ states('sensor.gw2000a_wind_speed') | float(0) | round(1) }} mph
+          {% elif states('sensor.gw2000a_humidity') | float(100) >= 88 %}
+            Humidity too high ({{ states('sensor.gw2000a_humidity') }}%)
+          {% elif states('sensor.gw2000a_soil_moisture_3') | float(100) >= 70 %}
+            Soil too wet ({{ states('sensor.gw2000a_soil_moisture_3') }}%)
+          {% elif states('sensor.dave_iii_battery') | int(0) <= 20 %}
+            Battery low ({{ states('sensor.dave_iii_battery') }}%) — charging
+          {% else %}
+            OK to mow
+          {% endif %}
+
+      - name: "Mower Next Scheduled"
+        unique_id: mower_next_scheduled
+        icon: mdi:calendar-clock
+        state: >
+          {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
+            Holiday Mode
+          {% else %}
+            {% set mow_days = [1, 3, 6] %}
+            {% set mow_hour = 9 %}
+            {% set mow_minute = 30 %}
+            {% set ns = namespace(found=false, result='Unknown') %}
+            {% for i in range(7) %}
+              {% if not ns.found %}
+                {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
+                {% if candidate.weekday() in mow_days and candidate > now() %}
+                  {% set ns.found = true %}
+                  {% set ns.result = candidate.strftime('%H:%M %a %-d %b') %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.result }}
+          {% endif %}
+
+      - name: "Mower Last Rain Formatted"
+        unique_id: mower_last_rain_formatted
+        icon: mdi:weather-rainy
+        state: >
+          {% set dt = states('input_datetime.mower_last_rain') | as_timestamp %}
+          {% if dt %}
+            {{ dt | timestamp_custom('%H:%M %a %-d %b') }}
+          {% else %}
+            Never
+          {% endif %}
+
+      - name: "Mower Last Completed Formatted"
+        unique_id: mower_last_completed_formatted
+        icon: mdi:calendar-clock
+        state: >
+          {% set dt = states('input_datetime.mower_last_completed') | as_timestamp %}
+          {% if dt %}
+            {{ dt | timestamp_custom('%H:%M %a %-d %b') }}
+          {% else %}
+            Unknown
+          {% endif %}
+
+
+# -----------------------------------------------------------------------------
+# AUTOMATIONS
+# -----------------------------------------------------------------------------
+automation:
+
+  # ---------------------------------------------------------------------------
+  # 1. SCHEDULED MOW
+  # Fires at 09:30 on mow days. Starts mowing if all conditions are met
+  # and Dave III hasn't already mowed today.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Scheduled Mow"
+    id: mower_scheduled_mow
+    triggers:
+      - trigger: time
+        at: "09:30:00"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ now().weekday() in [1, 3, 6] }}
+      - condition: state
+        entity_id: input_boolean.mower_holiday_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.mower_ok_to_mow
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.dave_iii_charging
+        state: "on"
+      - condition: template
+        value_template: >
+          {% set last = states('input_datetime.mower_last_completed') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            true
+          {% else %}
+            {{ (last | as_datetime).date() < now().date() }}
+          {% endif %}
+    actions:
+      - action: lawn_mower.start_mowing
+        target:
+          entity_id: lawn_mower.dave_iii
+
+
+  # ---------------------------------------------------------------------------
+  # 2. RETRY EVERY 30 MINUTES IF CONDITIONS WERE NOT MET AT SCHEDULE TIME
+  # Keeps retrying until 20:00. Won't fire if already mowed today.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Retry When Conditions Improve"
+    id: mower_retry_conditions
+    triggers:
+      - trigger: time_pattern
+        minutes: "/30"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ now().weekday() in [1, 3, 6] or is_state('input_boolean.mower_calendar_mow_requested', 'on') }}
+      - condition: template
+        value_template: >
+          {{ now().hour >= 9 and now().hour < 20 }}
+      - condition: state
+        entity_id: input_boolean.mower_holiday_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.mower_ok_to_mow
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.dave_iii_charging
+        state: "on"
+      - condition: template
+        value_template: >
+          {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
+      - condition: template
+        value_template: >
+          {% set last = states('input_datetime.mower_last_completed') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            true
+          {% else %}
+            {{ (last | as_datetime).date() < now().date() }}
+          {% endif %}
+    actions:
+      - action: lawn_mower.start_mowing
+        target:
+          entity_id: lawn_mower.dave_iii
+
+
+  # ---------------------------------------------------------------------------
+  # 3. TRACK LAST RAIN TIME
+  # Updates mower_last_rain whenever rain is detected, enabling the 2-hour
+  # post-rain lockout in the OK-to-mow sensor and Mow Now automation.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Track Last Rain"
+    id: mower_track_last_rain
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.gw2000a_rain_state_piezo
+        to: "on"
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.mower_last_rain
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+
+  # ---------------------------------------------------------------------------
+  # 4. RAIN DETECTED WHILE MOWING — RETURN TO DOCK IMMEDIATELY
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Dock on Rain"
+    id: mower_dock_on_rain
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.gw2000a_rain_state_piezo
+        to: "on"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('lawn_mower.dave_iii') == 'mowing' }}
+    actions:
+      - action: lawn_mower.dock
+        target:
+          entity_id: lawn_mower.dave_iii
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "⬇️ Dave III - Returning to Dock"
+          message: >
+            Rain detected! Dave III is heading back to the dock.
+            Rain rate: {{ states('sensor.gw2000a_rain_rate_piezo') }} mm/h
+
+
+  # ---------------------------------------------------------------------------
+  # 5. MOW NOW — MANUAL OVERRIDE
+  # Bypasses schedule, drying, and forecast checks.
+  # Blocked by active rain, post-rain lockout, and low battery.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Mow Now"
+    id: mower_mow_now
+    triggers:
+      - trigger: state
+        entity_id: input_button.mower_mow_now
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.gw2000a_rain_state_piezo
+        state: "off"
+      - condition: template
+        value_template: >
+          {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
+          {{ last_rain_ts == 0 or (now().timestamp() - last_rain_ts) > 7200 }}
+      - condition: template
+        value_template: >
+          {{ states('sensor.dave_iii_battery') | int(0) > 20 }}
+    actions:
+      - action: lawn_mower.start_mowing
+        target:
+          entity_id: lawn_mower.dave_iii
+
+
+  # ---------------------------------------------------------------------------
+  # 6. TRACK MOWING COMPLETION
+  # Records timestamp when Dave III docks after mowing.
+  # Used to prevent the retry automation triggering a second mow same day.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Track Completion"
+    id: mower_track_completion
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "docked"
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.mower_last_completed
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.mower_calendar_mow_requested
+
+
+  # ---------------------------------------------------------------------------
+  # 7. CAN I MOW? — WEATHER-AWARE MANUAL CHECK
+  # Checks all conditions including forecast. Starts mowing if clear,
+  # otherwise sends a Telegram message explaining exactly why it can't mow.
+  # Unlike Mow Now, this respects weather and drying conditions.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Can I Mow Check"
+    id: mower_can_i_mow
+    triggers:
+      - trigger: state
+        entity_id: input_button.mower_can_i_mow
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.mower_ok_to_mow
+                state: "on"
+              - condition: template
+                value_template: >
+                  {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
+            sequence:
+              - action: lawn_mower.start_mowing
+                target:
+                  entity_id: lawn_mower.dave_iii
+        default:
+          - action: telegram_bot.send_message
+            data:
+              entity_id:
+                - !secret telegram_notify_service
+              title: "⛔ Dave III - Can't Mow Yet"
+              message: "{{ states('sensor.mower_block_reason') }}"
+
+
+  # ---------------------------------------------------------------------------
+  # 8. RECORD START TIME WHEN MOWING BEGINS
+  # Fires whenever Dave III starts mowing (any trigger).
+  # Stores the start time so automation 13 can create an accurate calendar
+  # event on completion. calendar.update_event is not available in this
+  # instance, so the event is created once with exact start/end times.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Create Calendar Event"
+    id: mower_create_calendar_event
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "mowing"
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.mower_started_at
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      # Clear the scheduled event tracker so automation 13 creates a fresh
+      # placeholder for the next mow after this one completes
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.mower_scheduled_event_time
+        data:
+          value: ""
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.mower_calendar_event_time
+        data:
+          value: "{{ now().strftime('%Y-%m-%dT%H:%M:%S') }}"
+
+
+  # ---------------------------------------------------------------------------
+  # 9. NOTIFY — LEFT DOCK WITHOUT MOWING
+  # Fires if Dave III leaves the dock but doesn't reach mowing state within
+  # 2 minutes (e.g. connection drop, abort). Skipped if mowing starts normally.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Left Dock Without Mowing"
+    id: mower_notify_left_dock_without_mowing
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        from: "docked"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['mowing', 'returning'] }}
+    actions:
+      - delay: "00:02:00"
+      - condition: template
+        value_template: >
+          {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning', 'docked'] }}
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "⚠️ Dave III - Left Dock"
+          message: >
+            Dave III left the dock but hasn't started mowing.
+            Current state: {{ states('lawn_mower.dave_iii') }}
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+
+
+  # ---------------------------------------------------------------------------
+  # 10. NOTIFY — MOWING STARTED
+  # Fires on any mowing start (scheduled, Mow Now, or Can I Mow).
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Started"
+    id: mower_notify_started
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "mowing"
+    actions:
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "▶️ Dave III - Mowing Started"
+          message: >
+            Dave III has started mowing.
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+            Solar: {{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
+            Wind: {{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
+            Rain chance: {{ states('sensor.mower_rain_probability') }}%
+
+
+  # ---------------------------------------------------------------------------
+  # 11. NOTIFY — MOWING COMPLETED
+  # Fires when Dave III docks after a mowing run.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Completed"
+    id: mower_notify_completed
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "docked"
+    actions:
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "✅ Dave III - Mowing Complete"
+          message: >
+            Dave III has finished mowing and is back on charge.
+            Completed: {{ now().strftime('%H:%M') }}
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+            Area covered: {{ states('sensor.dave_iii_area') }} m²
+            Total time: {{ states('sensor.dave_iii_elapsed_time') }}
+
+
+  # ---------------------------------------------------------------------------
+  # 12. NOTIFY — ERROR
+  # Fires when Dave III reports an error state.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Error"
+    id: mower_notify_error
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "error"
+    actions:
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "⚠️ Dave III - Error"
+          message: >
+            Dave III has reported an error and may need attention.
+            Error: {{ states('sensor.dave_iii_last_error') }}
+            Time: {{ states('sensor.dave_iii_last_error_time') }}
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+
+
+  # ---------------------------------------------------------------------------
+  # 13. NOTIFY — PAUSED
+  # Fires when Dave III is paused (e.g. obstacle, or manual pause).
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Paused"
+    id: mower_notify_paused
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "paused"
+        from: "mowing"
+    actions:
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "⏸️ Dave III - Paused"
+          message: >
+            Dave III has paused mid-mow.
+            Progress: {{ states('sensor.dave_iii_progress') }}%
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+
+
+  # ---------------------------------------------------------------------------
+  # 14. CREATE CALENDAR EVENT WITH ACTUAL DURATION ON COMPLETION OR STOP
+  # Fires when Dave III docks (normal finish) or enters error state.
+  # Creates a single accurate event using the stored start time and now()
+  # as the end time. calendar.update_event is not available in this instance.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Update Calendar Event Duration"
+    id: mower_update_calendar_event_duration
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "docked"
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "error"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_text.mower_calendar_event_time') not in ['unknown', 'unavailable', ''] }}
+    actions:
+      - variables:
+          duration_mins: "{{ ((now() - (states('input_datetime.mower_started_at') | as_datetime)).total_seconds() / 60) | int }}"
+      - action: calendar.create_event
+        target:
+          entity_id: !secret mower_calendar
+        data:
+          summary: "Dave III Mowing"
+          start_date_time: "{{ states('input_text.mower_calendar_event_time') }}"
+          end_date_time: "{{ now().strftime('%Y-%m-%dT%H:%M:%S') }}"
+          description: >
+            Dave III mowed from {{ (states('input_datetime.mower_started_at') | as_datetime).strftime('%H:%M') }}
+            to {{ now().strftime('%H:%M') }}
+            ({{ (duration_mins // 60) ~ 'h ' if duration_mins >= 60 else '' }}{{ duration_mins % 60 }}m).
+            Area covered: {{ states('sensor.dave_iii_area') }} m²
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.mower_calendar_event_time
+        data:
+          value: ""
+
+
+  # ---------------------------------------------------------------------------
+  # 15. SYNC SCHEDULED CALENDAR PLACEHOLDER
+  # Keeps a "Dave III - Mow Scheduled" placeholder on the calendar for the
+  # next upcoming mow. Runs on startup, at midnight, after each mow completes,
+  # and when holiday mode is toggled. Deletes the old placeholder before
+  # creating the new one to avoid duplicates.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Sync Scheduled Calendar Placeholder"
+    id: mower_sync_scheduled_calendar_placeholder
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time
+        at: "00:05:00"
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "docked"
+      - trigger: state
+        entity_id: input_boolean.mower_holiday_mode
+    actions:
+      # Skip if holiday mode is on
+      - condition: state
+        entity_id: input_boolean.mower_holiday_mode
+        state: "off"
+      - variables:
+          next_mow: >
+            {% set ns = namespace(found=false, result='') %}
+            {% for i in range(7) %}
+              {% if not ns.found %}
+                {% set candidate = now().replace(hour=9, minute=30, second=0, microsecond=0) + timedelta(days=i) %}
+                {% if candidate.weekday() in [1, 3, 6] and candidate > now() %}
+                  {% set ns.found = true %}
+                  {% set ns.result = candidate.strftime('%Y-%m-%dT%H:%M:%S') %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.result }}
+      - condition: template
+        value_template: "{{ next_mow != '' }}"
+      # Only create if we haven't already created one for this date
+      - condition: template
+        value_template: >
+          {{ states('input_text.mower_scheduled_event_time') != next_mow }}
+      - action: calendar.create_event
+        target:
+          entity_id: !secret mower_calendar
+        data:
+          summary: "Dave III - Mow Scheduled"
+          start_date_time: "{{ next_mow }}"
+          end_date_time: >
+            {{ (next_mow | as_datetime + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%S') }}
+          description: "Dave III is scheduled to mow."
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.mower_scheduled_event_time
+        data:
+          value: "{{ next_mow }}"
+
+
+  # ---------------------------------------------------------------------------
+  # 16. CALENDAR-TRIGGERED MOW
+  # Fires when a Google Calendar event whose title contains "mow" starts.
+  # Sets the calendar-requested flag (enabling retries), then starts mowing
+  # if conditions are met or notifies via Telegram if not.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Calendar Triggered Mow"
+    id: mower_calendar_triggered_mow
+    triggers:
+      - trigger: calendar
+        event: start
+        entity_id: !secret mower_calendar
+    conditions:
+      - condition: template
+        value_template: >
+          {{ 'mow' in trigger.calendar_event.summary | lower }}
+      - condition: state
+        entity_id: input_boolean.mower_holiday_mode
+        state: "off"
+      - condition: template
+        value_template: >
+          {% set last = states('input_datetime.mower_last_completed') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            true
+          {% else %}
+            {{ (last | as_datetime).date() < now().date() }}
+          {% endif %}
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.mower_calendar_mow_requested
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.mower_ok_to_mow
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.dave_iii_charging
+                state: "on"
+              - condition: template
+                value_template: >
+                  {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
+            sequence:
+              - action: lawn_mower.start_mowing
+                target:
+                  entity_id: lawn_mower.dave_iii
+        default:
+          - action: telegram_bot.send_message
+            data:
+              entity_id:
+                - !secret telegram_notify_service
+              title: "⏳ Dave III - Calendar Mow Delayed"
+              message: >
+                Calendar mow requested but conditions aren't right yet.
+                Will retry every 30 minutes until 20:00.
+                Reason: {{ states('sensor.mower_block_reason') }}
+
+
+  # ---------------------------------------------------------------------------
+  # 17. CLEAR CALENDAR MOW FLAG AT MIDNIGHT
+  # Resets the calendar-requested flag each night so the retry automation
+  # doesn't carry over to the next day.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Clear Calendar Mow Flag"
+    id: mower_clear_calendar_mow_flag
+    triggers:
+      - trigger: time
+        at: "00:01:00"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.mower_calendar_mow_requested

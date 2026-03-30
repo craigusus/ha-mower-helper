@@ -1,6 +1,6 @@
 # Dave III Mower Package
 
-Home Assistant package for the Mammotion Luba robotic mower (Dave III). All helpers, template sensors, and automations are defined in a single file: `mower_helpers.yaml`.
+Home Assistant package for the Mammotion Yuka Mini robotic mower (Dave III). All helpers, template sensors, and automations are defined in a single file: `mower_helpers.yaml`.
 
 ## Setup
 
@@ -12,7 +12,7 @@ homeassistant:
     mower: !include mower/mower_helpers.yaml
 ```
 
-Keep `automation: !include automations.yaml` in `configuration.yaml` as normal — HA merges the automation list from this package automatically.
+Keep `automation: !include automations.yaml` in `configuration.yaml` as normal — HA merges the automation list from this package automatically. Although, they cannot be edited from the UI, because they are not stored in the `automations.yaml` file
 
 ---
 

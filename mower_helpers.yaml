@@ -87,9 +87,6 @@ template:
           {# --- Forecast check (Met Office) --- #}
           {% set low_precip_prob = states('sensor.mower_rain_probability') | int(100) < 50 %}
 
-          {# --- Sun position --- #}
-          {% set sun_up = states('sensor.sun_solar_elevation') | float(0) > 5 %}
-
           {# --- Drying conditions: sun OR wind is enough, plus low humidity --- #}
           {% set solar_ok  = states('sensor.gw2000a_solar_radiation') | float(0) > 100 %}
           {% set wind_ok   = states('sensor.gw2000a_wind_speed') | float(0) > 4.5 %}
@@ -106,7 +103,7 @@ template:
           {# --- Mower battery --- #}
           {% set battery_ok = states('sensor.dave_iii_battery') | int(0) > 20 %}
 
-          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and sun_up and drying_ok and soil_ok and battery_ok }}
+          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and drying_ok and soil_ok and battery_ok }}
 
   - sensor:
       - name: "Mower Block Reason"
@@ -124,8 +121,6 @@ template:
             Recent rain ({{ states('sensor.gw2000a_hourly_rain_rate_piezo') | float(0) | round(1) }} mm/h) — drying
           {% elif states('sensor.mower_rain_probability') | int(100) >= 50 %}
             Rain forecast — {{ states('sensor.mower_rain_probability') }}% chance
-          {% elif states('sensor.sun_solar_elevation') | float(0) <= 5 %}
-            Sun too low ({{ states('sensor.sun_solar_elevation') | float(0) | round(1) }}°)
           {% elif not (states('sensor.gw2000a_solar_radiation') | float(0) > 100 or states('sensor.gw2000a_wind_speed') | float(0) > 4.5) %}
             Poor drying — solar {{ states('sensor.gw2000a_solar_radiation') | float(0) | round(0) }} W/m², wind {{ states('sensor.gw2000a_wind_speed') | float(0) | round(1) }} mph
           {% elif states('sensor.gw2000a_humidity') | float(100) >= 88 %}

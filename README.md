@@ -70,7 +70,6 @@ All automated and calendar triggers check these before mowing:
 | Rain rate | < 0.5 mm/h |
 | Post-rain lockout | ≥ 2 hours since last rain |
 | Rain forecast | < 50% precipitation probability (Met Office) |
-| Sun elevation | > 5° above horizon |
 | Drying (solar) | > 100 W/m², **or** |
 | Drying (wind) | > 4.5 mph |
 | Humidity | < 88% |

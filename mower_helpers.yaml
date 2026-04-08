@@ -101,6 +101,7 @@ input_text:
     max: 25
 
 
+
 # -----------------------------------------------------------------------------
 # TEMPLATE SENSORS
 # -----------------------------------------------------------------------------
@@ -291,6 +292,9 @@ automation:
         state: "on"
       - condition: template
         value_template: >
+          {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
+      - condition: template
+        value_template: >
           {% set last = states('input_datetime.mower_last_completed') %}
           {% if last in ['unknown', 'unavailable', ''] %}
             true
@@ -435,7 +439,8 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int > 1 }}
+          {% set last = states('input_datetime.mower_last_completed') %}
+          {{ last in ['unknown', 'unavailable', ''] or (last | as_datetime).date() < now().date() }}
     actions:
       - action: input_datetime.set_datetime
         target:
@@ -581,7 +586,8 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int > 1 }}
+          {% set last = states('input_datetime.mower_last_completed') %}
+          {{ last in ['unknown', 'unavailable', ''] or (last | as_datetime).date() < now().date() }}
     actions:
       - action: telegram_bot.send_message
         data:
@@ -664,8 +670,6 @@ automation:
     actions:
       - variables:
           duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }}"
-      - condition: template
-        value_template: "{{ duration_mins > 1 }}"
       - action: calendar.create_event
         target:
           entity_id: !secret mower_calendar
@@ -690,8 +694,10 @@ automation:
   # 15. SYNC SCHEDULED CALENDAR PLACEHOLDER
   # Keeps a "Dave III - Mow Scheduled" placeholder on the calendar for the
   # next upcoming mow. Runs on startup, at midnight, after each mow completes,
-  # and when holiday mode is toggled. Deletes the old placeholder before
-  # creating the new one to avoid duplicates.
+  # and when holiday mode is toggled. Only creates a new placeholder when the
+  # next mow datetime changes — old placeholders become past events and do not
+  # trigger automation 16. Note: Google Calendar does not support returning
+  # event uids from create_event, so programmatic deletion is not possible.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Sync Scheduled Calendar Placeholder"
     id: mower_sync_scheduled_calendar_placeholder
@@ -728,7 +734,7 @@ automation:
             {{ ns.result }}
       - condition: template
         value_template: "{{ next_mow != '' }}"
-      # Only create if we haven't already created one for this date
+      # Only create if the next mow datetime has changed
       - condition: template
         value_template: >
           {{ states('input_text.mower_scheduled_event_time') != next_mow }}

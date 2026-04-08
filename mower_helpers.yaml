@@ -14,12 +14,9 @@
 # WIND SPEED: Thresholds assume mph. 4.5 mph ≈ 2 m/s (light breeze).
 # SOIL MOISTURE: sensor.gw2000a_soil_moisture_3 — blocks mowing above 70%.
 #
-# SCHEDULE: Edit the weekday lists in automations 1, 2 & 15.
-#   Python weekdays: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
-#   Default: Tuesday(1), Thursday(3), Sunday(6)
+# SCHEDULE: Toggle mow days via input_boolean.mower_day_* helpers in the UI.
 #
-# MOW TIME: Change "at: '09:30:00'" in automation 1 and the hour/minute
-#   values in automations 2 and 14.
+# MOW TIME: Change input_datetime.mower_start_time in the UI (one place only).
 # =============================================================================
 
 
@@ -30,6 +27,34 @@ input_boolean:
   mower_holiday_mode:
     name: "Mower - Holiday Mode"
     icon: mdi:airplane
+
+  mower_day_mon:
+    name: "Mower - Monday"
+    icon: mdi:calendar-week
+
+  mower_day_tue:
+    name: "Mower - Tuesday"
+    icon: mdi:calendar-week
+
+  mower_day_wed:
+    name: "Mower - Wednesday"
+    icon: mdi:calendar-week
+
+  mower_day_thu:
+    name: "Mower - Thursday"
+    icon: mdi:calendar-week
+
+  mower_day_fri:
+    name: "Mower - Friday"
+    icon: mdi:calendar-week
+
+  mower_day_sat:
+    name: "Mower - Saturday"
+    icon: mdi:calendar-week
+
+  mower_day_sun:
+    name: "Mower - Sunday"
+    icon: mdi:calendar-week
 
   mower_calendar_mow_requested:
     name: "Mower - Calendar Mow Requested"
@@ -60,6 +85,12 @@ input_datetime:
     has_date: true
     has_time: true
 
+  mower_start_time:
+    name: "Mower - Start Time"
+    has_date: false
+    has_time: true
+    initial: "09:30:00"
+
 input_text:
   mower_calendar_event_time:
     name: "Mower - Calendar Event Time"
@@ -74,6 +105,21 @@ input_text:
 # TEMPLATE SENSORS
 # -----------------------------------------------------------------------------
 template:
+  - sensor:
+      - name: "Mower Mow Days"
+        unique_id: mower_mow_days
+        icon: mdi:calendar-multiselect
+        state: >
+          {% set ns = namespace(days=[]) %}
+          {% if is_state('input_boolean.mower_day_mon', 'on') %}{% set ns.days = ns.days + [0] %}{% endif %}
+          {% if is_state('input_boolean.mower_day_tue', 'on') %}{% set ns.days = ns.days + [1] %}{% endif %}
+          {% if is_state('input_boolean.mower_day_wed', 'on') %}{% set ns.days = ns.days + [2] %}{% endif %}
+          {% if is_state('input_boolean.mower_day_thu', 'on') %}{% set ns.days = ns.days + [3] %}{% endif %}
+          {% if is_state('input_boolean.mower_day_fri', 'on') %}{% set ns.days = ns.days + [4] %}{% endif %}
+          {% if is_state('input_boolean.mower_day_sat', 'on') %}{% set ns.days = ns.days + [5] %}{% endif %}
+          {% if is_state('input_boolean.mower_day_sun', 'on') %}{% set ns.days = ns.days + [6] %}{% endif %}
+          {{ ns.days | to_json }}
+
   - binary_sensor:
       - name: "Mower OK to Mow"
         unique_id: mower_ok_to_mow
@@ -140,9 +186,10 @@ template:
           {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
             Holiday Mode
           {% else %}
-            {% set mow_days = [1, 3, 6] %}
-            {% set mow_hour = 9 %}
-            {% set mow_minute = 30 %}
+            {% set mow_days = states('sensor.mower_mow_days') | from_json %}
+            {% set t = states('input_datetime.mower_start_time') %}
+            {% set mow_hour = t[0:2] | int %}
+            {% set mow_minute = t[3:5] | int %}
             {% set ns = namespace(found=false, result='Unknown') %}
             {% for i in range(7) %}
               {% if not ns.found %}
@@ -154,6 +201,41 @@ template:
               {% endif %}
             {% endfor %}
             {{ ns.result }}
+          {% endif %}
+
+      - name: "Mower Next Scheduled ISO"
+        unique_id: mower_next_scheduled_iso
+        icon: mdi:calendar-clock
+        state: >
+          {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
+            unknown
+          {% else %}
+            {% set mow_days = states('sensor.mower_mow_days') | from_json %}
+            {% set t = states('input_datetime.mower_start_time') %}
+            {% set mow_hour = t[0:2] | int %}
+            {% set mow_minute = t[3:5] | int %}
+            {% set ns = namespace(found=false, result='unknown') %}
+            {% for i in range(7) %}
+              {% if not ns.found %}
+                {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
+                {% if candidate.weekday() in mow_days and candidate > now() %}
+                  {% set ns.found = true %}
+                  {% set ns.result = candidate.strftime('%Y-%m-%dT%H:%M:%S') %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.result }}
+          {% endif %}
+
+      - name: "Mower Estimated Finish"
+        unique_id: mower_estimated_finish
+        icon: mdi:timer-outline
+        state: >
+          {% set mins_left = states('sensor.dave_iii_time_left') | int(0) %}
+          {% if is_state('lawn_mower.dave_iii', 'mowing') and mins_left > 0 %}
+            {{ (now() + timedelta(minutes=mins_left)).strftime('%Y-%m-%dT%H:%M:%S') }}
+          {% else %}
+            unknown
           {% endif %}
 
       - name: "Mower Last Rain Formatted"
@@ -193,11 +275,11 @@ automation:
     id: mower_scheduled_mow
     triggers:
       - trigger: time
-        at: "09:30:00"
+        at: input_datetime.mower_start_time
     conditions:
       - condition: template
         value_template: >
-          {{ now().weekday() in [1, 3, 6] }}
+          {{ now().weekday() in (states('sensor.mower_mow_days') | from_json) }}
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
         state: "off"
@@ -233,10 +315,13 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ now().weekday() in [1, 3, 6] or is_state('input_boolean.mower_calendar_mow_requested', 'on') }}
+          {{ now().weekday() in (states('sensor.mower_mow_days') | from_json) or is_state('input_boolean.mower_calendar_mow_requested', 'on') }}
       - condition: template
         value_template: >
-          {{ now().hour >= 9 and now().hour < 20 }}
+          {% set t = states('input_datetime.mower_start_time') %}
+          {% set h = t[0:2] | int %}
+          {% set m = t[3:5] | int %}
+          {{ (now().hour > h or (now().hour == h and now().minute >= m)) and now().hour < 20 }}
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
         state: "off"
@@ -347,6 +432,10 @@ automation:
       - trigger: state
         entity_id: lawn_mower.dave_iii
         to: "docked"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int > 1 }}
     actions:
       - action: input_datetime.set_datetime
         target:
@@ -489,6 +578,10 @@ automation:
       - trigger: state
         entity_id: lawn_mower.dave_iii
         to: "docked"
+    conditions:
+      - condition: template
+        value_template: >
+          {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int > 1 }}
     actions:
       - action: telegram_bot.send_message
         data:
@@ -500,7 +593,7 @@ automation:
             Completed: {{ now().strftime('%H:%M') }}
             Battery: {{ states('sensor.dave_iii_battery') }}%
             Area covered: {{ states('sensor.dave_iii_area') }} m²
-            Total time: {{ states('sensor.dave_iii_elapsed_time') }}
+            Total time: {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }} min
 
 
   # ---------------------------------------------------------------------------
@@ -570,12 +663,14 @@ automation:
           {{ states('input_text.mower_calendar_event_time') not in ['unknown', 'unavailable', ''] }}
     actions:
       - variables:
-          duration_mins: "{{ ((now() - (states('input_datetime.mower_started_at') | as_datetime)).total_seconds() / 60) | int }}"
+          duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }}"
+      - condition: template
+        value_template: "{{ duration_mins > 1 }}"
       - action: calendar.create_event
         target:
           entity_id: !secret mower_calendar
         data:
-          summary: "Dave III Mowing"
+          summary: "Dave III Mowed"
           start_date_time: "{{ states('input_text.mower_calendar_event_time') }}"
           end_date_time: "{{ now().strftime('%Y-%m-%dT%H:%M:%S') }}"
           description: >
@@ -617,11 +712,14 @@ automation:
         state: "off"
       - variables:
           next_mow: >
+            {% set t = states('input_datetime.mower_start_time') %}
+            {% set h = t[0:2] | int %}
+            {% set m = t[3:5] | int %}
             {% set ns = namespace(found=false, result='') %}
             {% for i in range(7) %}
               {% if not ns.found %}
-                {% set candidate = now().replace(hour=9, minute=30, second=0, microsecond=0) + timedelta(days=i) %}
-                {% if candidate.weekday() in [1, 3, 6] and candidate > now() %}
+                {% set candidate = now().replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=i) %}
+                {% if candidate.weekday() in (states('sensor.mower_mow_days') | from_json) and candidate > now() %}
                   {% set ns.found = true %}
                   {% set ns.result = candidate.strftime('%Y-%m-%dT%H:%M:%S') %}
                 {% endif %}
@@ -665,7 +763,8 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ 'mow' in trigger.calendar_event.summary | lower }}
+          {{ 'mow' in trigger.calendar_event.summary | lower
+             and trigger.calendar_event.summary | lower != 'dave iii - mow scheduled' }}
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
         state: "off"

@@ -128,7 +128,8 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 | `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable) |
 | `sensor.mower_next_scheduled_iso` | `2026-04-10T09:30:00` | Next scheduled mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_estimated_finish` | `2026-04-08T11:45:00` | Estimated mow finish time based on `sensor.dave_iii_time_left` (ISO format, only set while mowing) |
-| `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time |
+| `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time (human-readable) |
+| `sensor.mower_last_completed_iso` | `2026-03-29T14:22:00` | Last completed mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_last_rain_formatted` | `11:45 Fri 28 Mar` | Last detected rain time |
 | `sensor.mower_block_reason` | `Post-rain lockout — 45 min ago, dry by 13:45` | Why mowing is currently blocked (or "OK to mow") |
 | `binary_sensor.mower_ok_to_mow` | `on` / `off` | All conditions met or not |

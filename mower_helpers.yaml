@@ -261,6 +261,17 @@ template:
             Unknown
           {% endif %}
 
+      - name: "Mower Last Completed ISO"
+        unique_id: mower_last_completed_iso
+        icon: mdi:calendar-clock
+        state: >
+          {% set dt = states('input_datetime.mower_last_completed') | as_timestamp %}
+          {% if dt %}
+            {{ dt | timestamp_custom('%Y-%m-%dT%H:%M:%S') }}
+          {% else %}
+            unknown
+          {% endif %}
+
 
 # -----------------------------------------------------------------------------
 # AUTOMATIONS

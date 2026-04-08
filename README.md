@@ -21,21 +21,20 @@ Keep `automation: !include automations.yaml` in `configuration.yaml` as normal �
 There are four ways to trigger a mow, each with different condition checks:
 
 ### 1. Automatic schedule
-Fires at **09:30 on Tuesday, Thursday, and Sunday**.
+Fires at the configured start time on enabled mow days.
+
+- Set the start time via `input_datetime.mower_start_time` in the UI
+- Toggle mow days via `input_boolean.mower_day_*` helpers in the UI (Mon–Sun)
 
 Checks before starting:
 - All weather conditions are met (see [Conditions](#conditions))
 - Mower is docked and charging
+- Mower is not already mowing or returning
 - Holiday Mode is off
 - Not already mowed today
 
-To change the schedule, edit the weekday lists in automations 1, 2, and 15 and the time in automation 1.
-```
-Python weekdays: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
-```
-
 ### 2. Automatic retry
-If conditions aren't met at 09:30, the mower retries **every 30 minutes until 20:00**. Same checks as the scheduled mow. Also retries calendar-triggered mows that couldn't start immediately.
+If conditions aren't met at the scheduled time, the mower retries **every 30 minutes until 20:00**. Same checks as the scheduled mow. Also retries calendar-triggered mows that couldn't start immediately.
 
 ### 3. Calendar trigger
 Create a Google Calendar event with **"mow" anywhere in the title** (e.g. "Mow garden", "Dave III mow") at the time you want it to start.
@@ -99,7 +98,7 @@ Telegram messages are sent for:
 | Mowing completed | Time, battery, area covered, duration |
 | Docked due to rain | Rain rate at time of return |
 | Calendar mow delayed | Reason conditions weren't met |
-| Can I Mow? blocked | Reason conditions aren't met |
+| Can I Mow? blocked | Reason conditions weren't met |
 | Error state | Error details and battery |
 | Paused mid-mow | Progress and battery |
 
@@ -107,14 +106,16 @@ Telegram messages are sent for:
 
 ## Calendar integration
 
-Two types of events are written to `calendar.craig_fews_gmail_com`:
+Two types of events are written to the calendar configured via `!secret mower_calendar`:
 
 | Event | When created |
 |---|---|
-| "Dave III Mowing" | When mowing completes — accurate start/end times |
+| "Dave III Mowed" | When mowing completes — uses stored start time and actual end time |
 | "Dave III - Mow Scheduled" | Next scheduled mow placeholder (2-hour window), updated on startup, midnight, after each mow, and when Holiday Mode is toggled |
 
-> Note: `calendar.update_event` is not available in this HA instance. The mowing event is created once on completion with exact times rather than being updated from a placeholder.
+> **Note:** `calendar.update_event` is not available in this HA instance. The mowing event is created once on completion with exact times rather than being updated from a placeholder.
+
+> **Note:** The Google Calendar integration does not return a uid when creating events, so old "Mow Scheduled" placeholder events cannot be deleted programmatically. They become past events and do not affect any automation logic. Manual cleanup in Google Calendar is needed if the mow schedule changes.
 
 ---
 
@@ -124,7 +125,9 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 
 | Sensor | Example value | Description |
 |---|---|---|
-| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time |
+| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable) |
+| `sensor.mower_next_scheduled_iso` | `2026-04-10T09:30:00` | Next scheduled mow time (ISO format, for TimeFlow Card) |
+| `sensor.mower_estimated_finish` | `2026-04-08T11:45:00` | Estimated mow finish time based on `sensor.dave_iii_time_left` (ISO format, only set while mowing) |
 | `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time |
 | `sensor.mower_last_rain_formatted` | `11:45 Fri 28 Mar` | Last detected rain time |
 | `sensor.mower_block_reason` | `Post-rain lockout — 45 min ago, dry by 13:45` | Why mowing is currently blocked (or "OK to mow") |
@@ -132,24 +135,34 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 
 ---
 
+## Known limitations (Mammotion integration)
+
+The following are outside the control of this package and depend on the Mammotion integration's polling behaviour:
+
+- **State reporting delay** — HA may detect the `mowing` state significantly later than the actual start. This affects `mower_started_at`, calendar event start times, and duration calculations in Telegram notifications.
+- **`sensor.dave_iii_time_left`** — Can briefly drop to 0 between polling updates while mowing, causing `sensor.mower_estimated_finish` to flicker. Guarded by also checking the mower is in `mowing` state.
+- **`binary_sensor.dave_iii_charging`** — If reported incorrectly, scheduled and calendar mows may silently fail their precondition check.
+
+---
+
 ## Automations reference
 
 | # | Alias | Purpose |
 |---|---|---|
-| 1 | Mower - Scheduled Mow | Starts at 09:30 on mow days if conditions are met |
+| 1 | Mower - Scheduled Mow | Starts at the configured time on mow days if all conditions are met |
 | 2 | Mower - Retry When Conditions Improve | Retries every 30 min until 20:00 on mow days or when calendar mow requested |
 | 3 | Mower - Track Last Rain | Records timestamp when rain sensor activates |
 | 4 | Mower - Dock on Rain | Returns mower to dock immediately if rain detected while mowing |
 | 5 | Mower - Mow Now | Manual override button — minimal condition checks |
-| 6 | Mower - Track Completion | Records completion timestamp; clears calendar mow flag |
+| 6 | Mower - Track Completion | Records completion timestamp when docked (if not already completed today); clears calendar mow flag |
 | 7 | Mower - Can I Mow Check | Weather-aware manual check — starts or sends Telegram reason |
 | 8 | Mower - Create Calendar Event | Records mow start time for use by automation 14 |
 | 9 | Mower - Notify Left Dock Without Mowing | Telegram notification if mower leaves dock but doesn't start mowing |
 | 10 | Mower - Notify Started | Telegram notification when mowing begins |
-| 11 | Mower - Notify Completed | Telegram notification when mowing finishes |
+| 11 | Mower - Notify Completed | Telegram notification when mowing finishes (if not already completed today) |
 | 12 | Mower - Notify Error | Telegram notification on error state |
 | 13 | Mower - Notify Paused | Telegram notification when paused mid-mow |
-| 14 | Mower - Update Calendar Event Duration | Creates accurate calendar event on completion |
-| 15 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar |
-| 16 | Mower - Calendar Triggered Mow | Fires on calendar events with "mow" in title |
+| 14 | Mower - Update Calendar Event Duration | Creates accurate calendar event on completion; validates start time format before calling calendar service |
+| 15 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar; cannot delete old placeholders due to Google Calendar integration limitation |
+| 16 | Mower - Calendar Triggered Mow | Fires on calendar events with "mow" in title (excluding "Dave III - Mow Scheduled") |
 | 17 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |

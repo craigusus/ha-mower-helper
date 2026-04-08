@@ -666,7 +666,7 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ states('input_text.mower_calendar_event_time') not in ['unknown', 'unavailable', ''] }}
+          {{ states('input_text.mower_calendar_event_time') | regex_match('^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$') }}
     actions:
       - variables:
           duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }}"
@@ -675,7 +675,7 @@ automation:
           entity_id: !secret mower_calendar
         data:
           summary: "Dave III Mowed"
-          start_date_time: "{{ states('input_text.mower_calendar_event_time') }}"
+          start_date_time: "{{ states('input_text.mower_calendar_event_time') | trim }}"
           end_date_time: "{{ now().strftime('%Y-%m-%dT%H:%M:%S') }}"
           description: >
             Dave III mowed from {{ (states('input_datetime.mower_started_at') | as_datetime).strftime('%H:%M') }}

@@ -324,7 +324,28 @@ automation:
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Scheduled Mow | TRIGGERED |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            charging={{ states('binary_sensor.dave_iii_charging') }}
+            ok_to_mow={{ states('binary_sensor.mower_ok_to_mow') }}
+            block={{ states('sensor.mower_block_reason') }}
+            last_completed={{ states('input_datetime.mower_last_completed') }}
       - delay: "00:01:00"
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Scheduled Mow | POST-DELAY |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+      - condition: template
+        value_template: >
+          {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
       - action: lawn_mower.start_mowing
         target:
           entity_id: lawn_mower.dave_iii
@@ -370,7 +391,29 @@ automation:
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Retry | TRIGGERED |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            charging={{ states('binary_sensor.dave_iii_charging') }}
+            ok_to_mow={{ states('binary_sensor.mower_ok_to_mow') }}
+            block={{ states('sensor.mower_block_reason') }}
+            calendar_flag={{ states('input_boolean.mower_calendar_mow_requested') }}
+            last_completed={{ states('input_datetime.mower_last_completed') }}
       - delay: "00:01:00"
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Retry | POST-DELAY |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+      - condition: template
+        value_template: >
+          {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
       - action: lawn_mower.start_mowing
         target:
           entity_id: lawn_mower.dave_iii
@@ -388,6 +431,13 @@ automation:
         entity_id: binary_sensor.gw2000a_rain_state_piezo
         to: "on"
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Track Last Rain | TRIGGERED |
+            rain_rate={{ states('sensor.gw2000a_hourly_rain_rate_piezo') }} mm/h
+            mower_state={{ states('lawn_mower.dave_iii') }}
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.mower_last_rain
@@ -409,6 +459,14 @@ automation:
         value_template: >
           {{ states('lawn_mower.dave_iii') == 'mowing' }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Dock on Rain | TRIGGERED |
+            mower_state={{ states('lawn_mower.dave_iii') }}
+            rain_rate={{ states('sensor.gw2000a_rain_rate_piezo') }} mm/h
+            battery={{ states('sensor.dave_iii_battery') }}%
       - action: lawn_mower.dock
         target:
           entity_id: lawn_mower.dave_iii
@@ -444,6 +502,15 @@ automation:
         value_template: >
           {{ states('sensor.dave_iii_battery') | int(0) > 20 }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Mow Now | TRIGGERED |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            rain={{ states('binary_sensor.gw2000a_rain_state_piezo') }}
+            last_rain={{ states('sensor.mower_last_rain_formatted') }}
       - action: lawn_mower.start_mowing
         target:
           entity_id: lawn_mower.dave_iii
@@ -472,6 +539,16 @@ automation:
              and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
              and (now().timestamp() - started) > 300 }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Track Completion | TRIGGERED |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            started_at={{ states('input_datetime.mower_started_at') }}
+            duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
+            area={{ states('sensor.dave_iii_area') }} m²
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.mower_last_completed
@@ -494,6 +571,20 @@ automation:
       - trigger: state
         entity_id: input_button.mower_can_i_mow
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Can I Mow | TRIGGERED |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            ok_to_mow={{ states('binary_sensor.mower_ok_to_mow') }}
+            block={{ states('sensor.mower_block_reason') }}
+            solar={{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
+            wind={{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
+            humidity={{ states('sensor.gw2000a_humidity') }}%
+            soil={{ states('sensor.gw2000a_soil_moisture_3') }}%
+            rain_prob={{ states('sensor.mower_rain_probability') }}%
       - choose:
           - conditions:
               - condition: state
@@ -529,6 +620,16 @@ automation:
         entity_id: lawn_mower.dave_iii
         to: "mowing"
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Mowing Started | TRIGGERED |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            solar={{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
+            wind={{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
+            rain_prob={{ states('sensor.mower_rain_probability') }}%
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.mower_started_at
@@ -564,6 +665,13 @@ automation:
         value_template: >
           {{ trigger.to_state.state not in ['mowing', 'returning'] }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Left Dock Without Mowing | TRIGGERED |
+            from=docked to={{ trigger.to_state.state }}
+            battery={{ states('sensor.dave_iii_battery') }}%
       - delay: "00:02:00"
       - condition: template
         value_template: >
@@ -590,6 +698,15 @@ automation:
         entity_id: lawn_mower.dave_iii
         to: "mowing"
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Notify Started | TRIGGERED |
+            battery={{ states('sensor.dave_iii_battery') }}%
+            solar={{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
+            wind={{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
+            rain_prob={{ states('sensor.mower_rain_probability') }}%
       - action: telegram_bot.send_message
         data:
           entity_id:
@@ -625,6 +742,14 @@ automation:
              and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
              and (now().timestamp() - started) > 300 }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Notify Completed | TRIGGERED |
+            battery={{ states('sensor.dave_iii_battery') }}%
+            area={{ states('sensor.dave_iii_area') }} m²
+            duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
       - action: telegram_bot.send_message
         data:
           entity_id:
@@ -659,6 +784,14 @@ automation:
              and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
              and (now().timestamp() - started) <= 300 }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Aborted Early | TRIGGERED |
+            battery={{ states('sensor.dave_iii_battery') }}%
+            duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
+            started_at={{ states('input_datetime.mower_started_at') }}
       - action: telegram_bot.send_message
         data:
           entity_id:
@@ -682,6 +815,14 @@ automation:
         entity_id: lawn_mower.dave_iii
         to: "error"
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Error | TRIGGERED |
+            error={{ states('sensor.dave_iii_last_error') }}
+            error_time={{ states('sensor.dave_iii_last_error_time') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
       - action: telegram_bot.send_message
         data:
           entity_id:
@@ -706,6 +847,14 @@ automation:
         to: "paused"
         from: "mowing"
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Paused | TRIGGERED |
+            progress={{ states('sensor.dave_iii_progress') }}%
+            battery={{ states('sensor.dave_iii_battery') }}%
+            area={{ states('sensor.dave_iii_area') }} m²
       - action: telegram_bot.send_message
         data:
           entity_id:
@@ -743,6 +892,16 @@ automation:
              and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
              and (now().timestamp() - started) > 300 }}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Calendar Event | TRIGGERED |
+            trigger={{ trigger.to_state.state }}
+            started_at={{ states('input_datetime.mower_started_at') }}
+            duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
+            area={{ states('sensor.dave_iii_area') }} m²
+            battery={{ states('sensor.dave_iii_battery') }}%
       - variables:
           duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }}"
       - action: calendar.create_event
@@ -787,6 +946,14 @@ automation:
       - trigger: state
         entity_id: input_boolean.mower_holiday_mode
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Sync Calendar Placeholder | TRIGGERED |
+            trigger={{ trigger.platform }}
+            holiday={{ states('input_boolean.mower_holiday_mode') }}
+            current_placeholder={{ states('input_text.mower_scheduled_event_time') }}
       # Skip if holiday mode is on
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
@@ -858,6 +1025,17 @@ automation:
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Calendar Triggered Mow | TRIGGERED |
+            event={{ trigger.calendar_event.summary }}
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+            ok_to_mow={{ states('binary_sensor.mower_ok_to_mow') }}
+            charging={{ states('binary_sensor.dave_iii_charging') }}
+            block={{ states('sensor.mower_block_reason') }}
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.mower_calendar_mow_requested
@@ -899,6 +1077,12 @@ automation:
       - trigger: time
         at: "00:01:00"
     actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Clear Calendar Mow Flag | TRIGGERED |
+            flag_was={{ states('input_boolean.mower_calendar_mow_requested') }}
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.mower_calendar_mow_requested

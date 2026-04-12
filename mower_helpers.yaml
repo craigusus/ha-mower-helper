@@ -21,6 +21,21 @@
 
 
 # -----------------------------------------------------------------------------
+# REST COMMANDS
+# Discord webhook — payload uses to_json to safely encode content (newlines,
+# quotes, etc.). Each notification builds its content via a Jinja2 expression
+# before calling this action.
+# Secret required:  discord_webhook_url
+# -----------------------------------------------------------------------------
+rest_command:
+  discord_webhook:
+    url: !secret discord_webhook_url
+    method: POST
+    content_type: application/json
+    payload: '{"content": {{ content | to_json }}, "username": "Dave III", "avatar_url": "https://raw.githubusercontent.com/craigusus/ha-mower-helper/main/YUKA_mini.png"}'
+
+
+# -----------------------------------------------------------------------------
 # INPUT HELPERS
 # -----------------------------------------------------------------------------
 input_boolean:
@@ -488,6 +503,12 @@ automation:
           message: >
             Rain detected! Dave III is heading back to the dock.
             Rain rate: {{ states('sensor.gw2000a_rain_rate_piezo') }} mm/h
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**⬇️ Dave III - Returning to Dock**\n"
+               ~ "Rain detected! Dave III is heading back to the dock.\n"
+               ~ "Rain rate: " ~ states('sensor.gw2000a_rain_rate_piezo') ~ " mm/h" }}
 
 
   # ---------------------------------------------------------------------------
@@ -624,6 +645,11 @@ automation:
                 - !secret telegram_notify_service
               title: "⛔ Dave III - Can't Mow Yet"
               message: "{{ states('sensor.mower_block_reason') }}"
+          - action: rest_command.discord_webhook
+            data:
+              content: >-
+                {{ "**⛔ Dave III - Can't Mow Yet**\n"
+                   ~ states('sensor.mower_block_reason') }}
 
 
   # ---------------------------------------------------------------------------
@@ -705,6 +731,13 @@ automation:
             Dave III left the dock but hasn't started mowing.
             Current state: {{ states('lawn_mower.dave_iii') }}
             Battery: {{ states('sensor.dave_iii_battery') }}%
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**⚠️ Dave III - Left Dock**\n"
+               ~ "Dave III left the dock but hasn't started mowing.\n"
+               ~ "Current state: " ~ states('lawn_mower.dave_iii') ~ "\n"
+               ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%" }}
 
 
   # ---------------------------------------------------------------------------
@@ -738,6 +771,15 @@ automation:
             Solar: {{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
             Wind: {{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
             Rain chance: {{ states('sensor.mower_rain_probability') }}%
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**▶️ Dave III - Mowing Started**\n"
+               ~ "Dave III has started mowing.\n"
+               ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%\n"
+               ~ "Solar: " ~ (states('sensor.gw2000a_solar_radiation') | round(0)) ~ " W/m²\n"
+               ~ "Wind: " ~ (states('sensor.gw2000a_wind_speed') | round(1)) ~ " mph\n"
+               ~ "Rain chance: " ~ states('sensor.mower_rain_probability') ~ "%" }}
 
 
   # ---------------------------------------------------------------------------
@@ -781,6 +823,15 @@ automation:
             Battery: {{ states('sensor.dave_iii_battery') }}%
             Area covered: {{ states('sensor.dave_iii_area') }} m²
             Total time: {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }} min
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**✅ Dave III - Mowing Complete**\n"
+               ~ "Dave III has finished mowing and is back on charge.\n"
+               ~ "Completed: " ~ now().strftime('%H:%M') ~ "\n"
+               ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%\n"
+               ~ "Area covered: " ~ states('sensor.dave_iii_area') ~ " m²\n"
+               ~ "Total time: " ~ (((now().timestamp() - (states('input_datetime.mower_started_at') | as_timestamp)) / 60) | int) ~ " min" }}
 
 
   # ---------------------------------------------------------------------------
@@ -822,6 +873,15 @@ automation:
             {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }} min.
             Battery: {{ states('sensor.dave_iii_battery') }}%
             Will retry at the next 30-minute interval if conditions are still met.
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**⚠️ Dave III - Aborted Early**\n"
+               ~ "Dave III started mowing but returned to dock after "
+               ~ (((now().timestamp() - (states('input_datetime.mower_started_at') | as_timestamp(0))) / 60) | int)
+               ~ " min.\n"
+               ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%\n"
+               ~ "Will retry at the next 30-minute interval if conditions are still met." }}
 
 
   # ---------------------------------------------------------------------------
@@ -853,6 +913,14 @@ automation:
             Error: {{ states('sensor.dave_iii_last_error') }}
             Time: {{ states('sensor.dave_iii_last_error_time') }}
             Battery: {{ states('sensor.dave_iii_battery') }}%
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**⚠️ Dave III - Error**\n"
+               ~ "Dave III has reported an error and may need attention.\n"
+               ~ "Error: " ~ states('sensor.dave_iii_last_error') ~ "\n"
+               ~ "Time: " ~ states('sensor.dave_iii_last_error_time') ~ "\n"
+               ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%" }}
 
 
   # ---------------------------------------------------------------------------
@@ -884,6 +952,13 @@ automation:
             Dave III has paused mid-mow.
             Progress: {{ states('sensor.dave_iii_progress') }}%
             Battery: {{ states('sensor.dave_iii_battery') }}%
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**⏸️ Dave III - Paused**\n"
+               ~ "Dave III has paused mid-mow.\n"
+               ~ "Progress: " ~ states('sensor.dave_iii_progress') ~ "%\n"
+               ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%" }}
 
 
   # ---------------------------------------------------------------------------
@@ -1089,6 +1164,13 @@ automation:
                 Calendar mow requested but conditions aren't right yet.
                 Will retry every 30 minutes until 20:00.
                 Reason: {{ states('sensor.mower_block_reason') }}
+          - action: rest_command.discord_webhook
+            data:
+              content: >-
+                {{ "**⏳ Dave III - Calendar Mow Delayed**\n"
+                   ~ "Calendar mow requested but conditions aren't right yet.\n"
+                   ~ "Will retry every 30 minutes until 20:00.\n"
+                   ~ "Reason: " ~ states('sensor.mower_block_reason') }}
 
 
   # ---------------------------------------------------------------------------

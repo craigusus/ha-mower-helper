@@ -55,6 +55,7 @@ Still blocked by:
 - Active rain
 - Post-rain lockout (within 2 hours of last rain)
 - Low battery (≤ 20%)
+- Error code 1415 (Mammotion empty path error)
 
 ### 5. Can I Mow? (manual button)
 A dashboard button that checks **all** conditions including weather forecast and drying. If clear, starts mowing. If not, sends a Telegram message explaining exactly why.
@@ -76,6 +77,7 @@ All automated and calendar triggers check these before mowing:
 | Humidity | < 88% |
 | Soil moisture | < 70% (`sensor.gw2000a_soil_moisture_3`) |
 | Battery | > 20% |
+| Error code | Not 1415 (Mammotion empty path error) |
 
 Wind speed thresholds assume **mph**. 4.5 mph ≈ 2 m/s (light breeze).
 
@@ -146,7 +148,7 @@ The following are outside the control of this package and depend on the Mammotio
 - **State reporting delay** — HA may detect the `mowing` state significantly later than the actual start. This affects `mower_started_at`, calendar event start times, and duration calculations in Telegram notifications.
 - **`sensor.dave_iii_time_left`** — Can briefly drop to 0 between polling updates while mowing, causing `sensor.mower_estimated_finish` to flicker. Guarded by also checking the mower is in `mowing` state.
 - **`binary_sensor.dave_iii_charging`** — If reported incorrectly, scheduled and calendar mows may silently fail their precondition check.
-- **MowPathSaga empty path** — The Mammotion integration occasionally starts a mow with an empty zone/line list (`line hash list was empty — falling back to zone_hashs=[]`), causing the mower to leave the dock and return immediately without mowing. The 1-minute pre-start delay is a workaround. If it still occurs, the abort-early notification will fire and retries will continue automatically.
+- **MowPathSaga empty path (error 1415)** — The Mammotion integration occasionally starts a mow with an empty zone/line list (`line hash list was empty — falling back to zone_hashs=[]`), causing the mower to leave the dock and return immediately. Diagnostics confirm the map data is present but `work.zone_hashs` is populated with zeros — a pymammotion library bug. The 1-minute pre-start delay is a workaround. All mowing automations also block if `sensor.dave_iii_last_error_code` is `1415` to prevent repeated failed attempts.
 
 ---
 

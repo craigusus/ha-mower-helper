@@ -202,7 +202,7 @@ template:
               Retrying — today until 20:00
             {% else %}
               {% set ns = namespace(found=false, result='Unknown') %}
-              {% for i in range(7) %}
+              {% for i in range(8) %}
                 {% if not ns.found %}
                   {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
                   {% if candidate.weekday() in mow_days and candidate > now() %}
@@ -227,7 +227,7 @@ template:
             {% set mow_hour = t[0:2] | int %}
             {% set mow_minute = t[3:5] | int %}
             {% set ns = namespace(found=false, result='unknown') %}
-            {% for i in range(7) %}
+            {% for i in range(8) %}
               {% if not ns.found %}
                 {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
                 {% if candidate.weekday() in mow_days and candidate > now() %}
@@ -323,6 +323,11 @@ automation:
           {% else %}
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.dave_iii_last_error_code
+            state: "1415"
     actions:
       - action: system_log.write
         data:
@@ -390,6 +395,11 @@ automation:
           {% else %}
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.dave_iii_last_error_code
+            state: "1415"
     actions:
       - action: system_log.write
         data:
@@ -501,6 +511,11 @@ automation:
       - condition: template
         value_template: >
           {{ states('sensor.dave_iii_battery') | int(0) > 20 }}
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.dave_iii_last_error_code
+            state: "1415"
     actions:
       - action: system_log.write
         data:
@@ -593,6 +608,11 @@ automation:
               - condition: template
                 value_template: >
                   {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.dave_iii_last_error_code
+                    state: "1415"
             sequence:
               - action: lawn_mower.start_mowing
                 target:
@@ -964,7 +984,7 @@ automation:
             {% set h = t[0:2] | int %}
             {% set m = t[3:5] | int %}
             {% set ns = namespace(found=false, result='') %}
-            {% for i in range(7) %}
+            {% for i in range(8) %}
               {% if not ns.found %}
                 {% set candidate = now().replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=i) %}
                 {% if candidate.weekday() in (states('sensor.mower_mow_days') | from_json) and candidate > now() %}
@@ -1024,6 +1044,11 @@ automation:
           {% else %}
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.dave_iii_last_error_code
+            state: "1415"
     actions:
       - action: system_log.write
         data:

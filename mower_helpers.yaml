@@ -1,5 +1,5 @@
 # =============================================================================
-# Mower Package - Dave III (Mammotion Luba)
+# Mower Package - Dave III (Mammotion Yuka Mini)
 # Helpers, template sensors, and automations in a single package file.
 # =============================================================================
 #
@@ -191,17 +191,28 @@ template:
             {% set t = states('input_datetime.mower_start_time') %}
             {% set mow_hour = t[0:2] | int %}
             {% set mow_minute = t[3:5] | int %}
-            {% set ns = namespace(found=false, result='Unknown') %}
-            {% for i in range(7) %}
-              {% if not ns.found %}
-                {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
-                {% if candidate.weekday() in mow_days and candidate > now() %}
-                  {% set ns.found = true %}
-                  {% set ns.result = candidate.strftime('%H:%M %a %-d %b') %}
+            {% set last = states('input_datetime.mower_last_completed') %}
+            {% set mowed_today = last not in ['unknown', 'unavailable', '']
+                                 and (last | as_datetime).date() == now().date() %}
+            {% set retry_active = now().weekday() in mow_days
+                                  and (now().hour > mow_hour or (now().hour == mow_hour and now().minute >= mow_minute))
+                                  and now().hour < 20
+                                  and not mowed_today %}
+            {% if retry_active %}
+              Retrying — today until 20:00
+            {% else %}
+              {% set ns = namespace(found=false, result='Unknown') %}
+              {% for i in range(7) %}
+                {% if not ns.found %}
+                  {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
+                  {% if candidate.weekday() in mow_days and candidate > now() %}
+                    {% set ns.found = true %}
+                    {% set ns.result = candidate.strftime('%H:%M %a %-d %b') %}
+                  {% endif %}
                 {% endif %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.result }}
+              {% endfor %}
+              {{ ns.result }}
+            {% endif %}
           {% endif %}
 
       - name: "Mower Next Scheduled ISO"
@@ -313,6 +324,7 @@ automation:
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
     actions:
+      - delay: "00:01:00"
       - action: lawn_mower.start_mowing
         target:
           entity_id: lawn_mower.dave_iii
@@ -358,6 +370,7 @@ automation:
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
     actions:
+      - delay: "00:01:00"
       - action: lawn_mower.start_mowing
         target:
           entity_id: lawn_mower.dave_iii
@@ -452,6 +465,12 @@ automation:
         value_template: >
           {% set last = states('input_datetime.mower_last_completed') %}
           {{ last in ['unknown', 'unavailable', ''] or (last | as_datetime).date() < now().date() }}
+      - condition: template
+        value_template: >
+          {% set started = states('input_datetime.mower_started_at') | as_timestamp(0) %}
+          {{ started > 0
+             and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+             and (now().timestamp() - started) > 300 }}
     actions:
       - action: input_datetime.set_datetime
         target:
@@ -599,6 +618,12 @@ automation:
         value_template: >
           {% set last = states('input_datetime.mower_last_completed') %}
           {{ last in ['unknown', 'unavailable', ''] or (last | as_datetime).date() < now().date() }}
+      - condition: template
+        value_template: >
+          {% set started = states('input_datetime.mower_started_at') | as_timestamp(0) %}
+          {{ started > 0
+             and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+             and (now().timestamp() - started) > 300 }}
     actions:
       - action: telegram_bot.send_message
         data:
@@ -614,7 +639,40 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 12. NOTIFY — ERROR
+  # 12. NOTIFY — ABORTED EARLY
+  # Fires when Dave III docks within 5 minutes of starting a mow.
+  # Catches hardware aborts (GPS failure, boundary issue, obstacle) that the
+  # mower resolves itself without entering error state. Sends a Telegram alert
+  # so the user knows a retry will be attempted.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Aborted Early"
+    id: mower_notify_aborted_early
+    triggers:
+      - trigger: state
+        entity_id: lawn_mower.dave_iii
+        to: "docked"
+    conditions:
+      - condition: template
+        value_template: >
+          {% set started = states('input_datetime.mower_started_at') | as_timestamp(0) %}
+          {{ started > 0
+             and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+             and (now().timestamp() - started) <= 300 }}
+    actions:
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "⚠️ Dave III - Aborted Early"
+          message: >
+            Dave III started mowing but returned to dock after
+            {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }} min.
+            Battery: {{ states('sensor.dave_iii_battery') }}%
+            Will retry at the next 30-minute interval if conditions are still met.
+
+
+  # ---------------------------------------------------------------------------
+  # 13. NOTIFY — ERROR
   # Fires when Dave III reports an error state.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Notify Error"
@@ -637,7 +695,7 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 13. NOTIFY — PAUSED
+  # 14. NOTIFY — PAUSED
   # Fires when Dave III is paused (e.g. obstacle, or manual pause).
   # ---------------------------------------------------------------------------
   - alias: "Mower - Notify Paused"
@@ -660,7 +718,7 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 14. CREATE CALENDAR EVENT WITH ACTUAL DURATION ON COMPLETION OR STOP
+  # 15. CREATE CALENDAR EVENT WITH ACTUAL DURATION ON COMPLETION OR STOP
   # Fires when Dave III docks (normal finish) or enters error state.
   # Creates a single accurate event using the stored start time and now()
   # as the end time. calendar.update_event is not available in this instance.
@@ -678,6 +736,12 @@ automation:
       - condition: template
         value_template: >
           {{ states('input_text.mower_calendar_event_time') | regex_match('^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$') }}
+      - condition: template
+        value_template: >
+          {% set started = states('input_datetime.mower_started_at') | as_timestamp(0) %}
+          {{ started > 0
+             and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+             and (now().timestamp() - started) > 300 }}
     actions:
       - variables:
           duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }}"
@@ -702,7 +766,7 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 15. SYNC SCHEDULED CALENDAR PLACEHOLDER
+  # 16. SYNC SCHEDULED CALENDAR PLACEHOLDER
   # Keeps a "Dave III - Mow Scheduled" placeholder on the calendar for the
   # next upcoming mow. Runs on startup, at midnight, after each mow completes,
   # and when holiday mode is toggled. Only creates a new placeholder when the
@@ -766,7 +830,7 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 16. CALENDAR-TRIGGERED MOW
+  # 17. CALENDAR-TRIGGERED MOW
   # Fires when a Google Calendar event whose title contains "mow" starts.
   # Sets the calendar-requested flag (enabling retries), then starts mowing
   # if conditions are met or notifies via Telegram if not.
@@ -825,7 +889,7 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 17. CLEAR CALENDAR MOW FLAG AT MIDNIGHT
+  # 18. CLEAR CALENDAR MOW FLAG AT MIDNIGHT
   # Resets the calendar-requested flag each night so the retry automation
   # doesn't carry over to the next day.
   # ---------------------------------------------------------------------------

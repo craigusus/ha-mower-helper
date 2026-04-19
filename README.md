@@ -78,7 +78,7 @@ Still blocked by:
 - Error code 1415 (Mammotion empty path error)
 
 ### 5. Can I Mow? (manual button)
-A dashboard button that checks **all** conditions including weather forecast and drying. If clear, starts mowing. If not, sends a Telegram message explaining exactly why.
+A dashboard button that checks **all** conditions including weather forecast and drying. If clear, sends an actionable push notification to your phone and a persistent HA notification asking you to confirm before mowing starts. Tapping **Start Mowing** in the notification starts the mower; tapping **Cancel** or dismissing does nothing. If conditions aren't met, sends the block reason via push notification, persistent notification, Telegram, and Discord.
 
 ---
 
@@ -184,7 +184,8 @@ The following are outside the control of this package and depend on the Mammotio
 | 4 | Mower - Dock on Rain | Returns mower to dock immediately if rain detected while mowing |
 | 5 | Mower - Mow Now | Manual override button — minimal condition checks |
 | 6 | Mower - Track Completion | Records completion timestamp when docked only if mower ran >5 min today; clears calendar mow flag |
-| 7 | Mower - Can I Mow Check | Weather-aware manual check — starts or sends Telegram + Discord reason |
+| 7 | Mower - Can I Mow Check | Weather-aware manual check — sends actionable notification to confirm, or notifies with block reason |
+| 7a | Mower - Confirm Mow Action | Fires when user taps "Start Mowing" on the Can I Mow? notification; starts mower and clears persistent notification |
 | 8 | Mower - Create Calendar Event | Records mow start time; sets calendar event start marker |
 | 9 | Mower - Notify Left Dock Without Mowing | Telegram + Discord notification if mower leaves dock but never reaches mowing state |
 | 10 | Mower - Notify Started | Telegram + Discord notification when mowing begins |

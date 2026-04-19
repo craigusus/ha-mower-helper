@@ -597,8 +597,9 @@ automation:
 
   # ---------------------------------------------------------------------------
   # 7. CAN I MOW? — WEATHER-AWARE MANUAL CHECK
-  # Checks all conditions including forecast. Starts mowing if clear,
-  # otherwise sends a Telegram message explaining exactly why it can't mow.
+  # Checks all conditions including forecast. If clear, sends an actionable
+  # push notification and persistent notification asking the user to confirm
+  # before mowing starts. If blocked, notifies with the reason.
   # Unlike Mow Now, this respects weather and drying conditions.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Can I Mow Check"
@@ -635,10 +636,31 @@ automation:
                     entity_id: sensor.dave_iii_last_error_code
                     state: "1415"
             sequence:
-              - action: lawn_mower.start_mowing
-                target:
-                  entity_id: lawn_mower.dave_iii
+              - action: notify.mobile_app_oneplus_11
+                data:
+                  title: "✅ Dave III - Ready to Mow"
+                  message: "Conditions are good. Do you want to start mowing now?"
+                  data:
+                    actions:
+                      - action: "MOWER_CONFIRM_MOW"
+                        title: "✅ Start Mowing"
+                      - action: "MOWER_CANCEL_MOW"
+                        title: "❌ Cancel"
+              - action: persistent_notification.create
+                data:
+                  notification_id: mower_can_i_mow
+                  title: "✅ Dave III - Ready to Mow"
+                  message: "Conditions are good. Tap **Start Mowing** in the notification on your phone to begin, or dismiss to cancel."
         default:
+          - action: notify.mobile_app_oneplus_11
+            data:
+              title: "⛔ Dave III - Can't Mow Yet"
+              message: "{{ states('sensor.mower_block_reason') }}"
+          - action: persistent_notification.create
+            data:
+              notification_id: mower_can_i_mow
+              title: "⛔ Dave III - Can't Mow Yet"
+              message: "{{ states('sensor.mower_block_reason') }}"
           - action: telegram_bot.send_message
             data:
               entity_id:
@@ -650,6 +672,35 @@ automation:
               content: >-
                 {{ "**⛔ Dave III - Can't Mow Yet**\n"
                    ~ states('sensor.mower_block_reason') }}
+
+
+  # ---------------------------------------------------------------------------
+  # 7a. CAN I MOW? — CONFIRM MOW ACTION
+  # Fires when the user taps "Start Mowing" on the actionable notification
+  # sent by automation 7. Starts the mower and clears the persistent
+  # notification. Tapping Cancel or dismissing simply does nothing.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Confirm Mow Action"
+    id: mower_confirm_mow_action
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: MOWER_CONFIRM_MOW
+    actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Can I Mow | CONFIRMED via notification |
+            state={{ states('lawn_mower.dave_iii') }}
+            battery={{ states('sensor.dave_iii_battery') }}%
+      - action: lawn_mower.start_mowing
+        target:
+          entity_id: lawn_mower.dave_iii
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: mower_can_i_mow
 
 
   # ---------------------------------------------------------------------------

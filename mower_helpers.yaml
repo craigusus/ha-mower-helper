@@ -1076,8 +1076,11 @@ automation:
   # next upcoming mow. Runs on startup, at midnight, after each mow completes,
   # and when holiday mode is toggled. Only creates a new placeholder when the
   # next mow datetime changes — old placeholders become past events and do not
-  # trigger automation 16. Note: Google Calendar does not support returning
-  # event uids from create_event, so programmatic deletion is not possible.
+  # trigger automation 16. As a second guard against duplicates, the automation
+  # queries the calendar via calendar.get_events and skips creation if a
+  # matching "Dave III - Mow Scheduled" event already exists at that time.
+  # Note: Google Calendar does not support returning event uids from
+  # create_event, so programmatic deletion is not possible.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Sync Scheduled Calendar Placeholder"
     id: mower_sync_scheduled_calendar_placeholder
@@ -1126,6 +1129,27 @@ automation:
       - condition: template
         value_template: >
           {{ states('input_text.mower_scheduled_event_time') != next_mow }}
+      # Double-check the calendar itself for an existing placeholder at that time
+      - action: calendar.get_events
+        target:
+          entity_id: !secret mower_calendar
+        data:
+          start_date_time: >
+            {{ (next_mow | as_datetime - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%S') }}
+          end_date_time: >
+            {{ (next_mow | as_datetime + timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%S') }}
+        response_variable: cal_events
+      - condition: template
+        value_template: >
+          {% set ns = namespace(found=false) %}
+          {% for key in cal_events %}
+            {% for event in cal_events[key].events %}
+              {% if event.summary == 'Dave III - Mow Scheduled' %}
+                {% set ns.found = true %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          {{ not ns.found }}
       - action: calendar.create_event
         target:
           entity_id: !secret mower_calendar

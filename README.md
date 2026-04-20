@@ -194,6 +194,6 @@ The following are outside the control of this package and depend on the Mammotio
 | 13 | Mower - Notify Error | Telegram + Discord notification on error state |
 | 14 | Mower - Notify Paused | Telegram + Discord notification when paused mid-mow |
 | 15 | Mower - Update Calendar Event Duration | Creates accurate calendar event on completion (>5 min run only) |
-| 16 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar; cannot delete old placeholders due to Google Calendar integration limitation |
+| 16 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar; queries calendar via `calendar.get_events` to prevent duplicate placeholders |
 | 17 | Mower - Calendar Triggered Mow | Fires on calendar events with "mow" in title (excluding "Dave III - Mow Scheduled") |
 | 18 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |

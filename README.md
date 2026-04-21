@@ -21,6 +21,9 @@ Keep `automation: !include automations.yaml` in `configuration.yaml` as normal �
 Add these entries to your Home Assistant `secrets.yaml`:
 
 ```yaml
+# Mobile app notify service — found under Settings → Devices & Services → Companion App
+mower_notify_service: "notify.mobile_app_your_phone"
+
 # Telegram — entity ID from your Telegram bot integration
 telegram_notify_service: "telegram_bot.send_message_YOUR_CHAT_ID"
 
@@ -32,7 +35,20 @@ discord_webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBH
 mower_calendar: "calendar.your_google_calendar"
 ```
 
-All three secrets are required. If you don't use Telegram or Discord, the automations will log errors on each notification event — comment out the corresponding actions in `mower_helpers.yaml` if you only need one.
+---
+
+## Optional services — what to comment out
+
+If you don't use all of the above, comment out the relevant actions in `mower_helpers.yaml` or HA will log errors every time a notification fires.
+
+| Service | Used in automations | What to comment out |
+|---|---|---|
+| Mobile app (push notifications) | 7 (Can I Mow?) | `action: !secret mower_notify_service` blocks in automations 7 and 7a |
+| Telegram | 4, 7, 9, 10, 11, 12, 13, 14, 17 | Every `action: telegram_bot.send_message` block |
+| Discord | 4, 7, 9, 10, 11, 12, 13, 14, 17 | Every `action: rest_command.discord_webhook` block |
+| Google Calendar | 15, 16, 17 | Automations 15 and 16 entirely; the calendar trigger in 17 |
+
+> If you remove all calendar automations (15, 16, 17), you can also remove `mower_calendar_event_time` and `mower_scheduled_event_time` from the `input_text` section, and the `rest_command` block at the top.
 
 ---
 
@@ -44,6 +60,7 @@ There are four ways to trigger a mow, each with different condition checks:
 Fires at the configured start time on enabled mow days.
 
 - Set the start time via `input_datetime.mower_start_time` in the UI
+- Set the end time (retry cutoff) via `input_datetime.mower_end_time` in the UI (default 20:00)
 - Toggle mow days via `input_boolean.mower_day_*` helpers in the UI (Mon–Sun)
 
 Checks before starting:
@@ -56,7 +73,7 @@ Checks before starting:
 A 1-minute delay is applied before sending the start command, to allow the Mammotion integration time to sync mow path data after connection is established.
 
 ### 2. Automatic retry
-If conditions aren't met at the scheduled time, or if the mower aborts early, the mower retries **every 30 minutes until 20:00**. Same checks as the scheduled mow. Also retries calendar-triggered mows that couldn't start immediately. A 1-minute delay is also applied before each retry.
+If conditions aren't met at the scheduled time, or if the mower aborts early, the mower retries **every 30 minutes until the configured end time** (`input_datetime.mower_end_time`, default 20:00). Same checks as the scheduled mow. Also retries calendar-triggered mows that couldn't start immediately. A 1-minute delay is also applied before each retry.
 
 ### 3. Calendar trigger
 Create a Google Calendar event with **"mow" anywhere in the title** (e.g. "Mow garden", "Dave III mow") at the time you want it to start.
@@ -152,13 +169,13 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 
 | Sensor | Example value | Description |
 |---|---|---|
-| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable); shows `Retrying — today until 20:00` while retries are active |
+| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable); shows `Retrying — today until HH:MM` while retries are active |
 | `sensor.mower_next_scheduled_iso` | `2026-04-10T09:30:00` | Next scheduled mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_estimated_finish` | `2026-04-08T11:45:00` | Estimated mow finish time based on `sensor.dave_iii_time_left` (ISO format, only set while mowing) |
 | `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time (human-readable) |
 | `sensor.mower_last_completed_iso` | `2026-03-29T14:22:00` | Last completed mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_last_rain_formatted` | `11:45 Fri 28 Mar` | Last detected rain time |
-| `sensor.mower_block_reason` | `Post-rain lockout — 45 min ago, dry by 13:45` | Why mowing is currently blocked (or "OK to mow") |
+| `sensor.mower_block_reason` | `Post-rain lockout — 45 min ago, dry by 13:45` | Why mowing is currently blocked (or "OK to mow"); shows `Outside mowing hours` when outside the configured start/end window; shows `OK to mow — no RTK fix` when all conditions are met but GPS positioning is degraded |
 | `binary_sensor.mower_ok_to_mow` | `on` / `off` | All conditions met or not |
 
 ---
@@ -197,3 +214,5 @@ The following are outside the control of this package and depend on the Mammotio
 | 16 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar; queries calendar via `calendar.get_events` to prevent duplicate placeholders |
 | 17 | Mower - Calendar Triggered Mow | Fires on calendar events with "mow" in title (excluding "Dave III - Mow Scheduled") |
 | 18 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |
+| 19 | Mower - Notify Blade Maintenance Due | Telegram + Discord alert once when blade time reaches the mower's warn threshold |
+| 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |

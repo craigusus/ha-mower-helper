@@ -1,22 +1,7 @@
 # =============================================================================
 # Mower Package - Dave III (Mammotion Yuka Mini)
 # Helpers, template sensors, and automations in a single package file.
-# =============================================================================
-#
-# SETUP: Add to configuration.yaml as a package:
-#   homeassistant:
-#     packages:
-#       mower: !include mower/mower_helpers.yaml
-#
-# Keep automation: !include automations.yaml in configuration.yaml as normal.
-# HA merges the automation: list from this package automatically.
-#
-# WIND SPEED: Thresholds assume mph. 4.5 mph ≈ 2 m/s (light breeze).
-# SOIL MOISTURE: sensor.gw2000a_soil_moisture_3 — blocks mowing above 70%.
-#
-# SCHEDULE: Toggle mow days via input_boolean.mower_day_* helpers in the UI.
-#
-# MOW TIME: Change input_datetime.mower_start_time in the UI (one place only).
+# See README.md for setup, configuration, and secrets reference.
 # =============================================================================
 
 
@@ -75,6 +60,10 @@ input_boolean:
     name: "Mower - Calendar Mow Requested"
     icon: mdi:calendar-check
 
+  mower_blade_warned:
+    name: "Mower - Blade Maintenance Warned"
+    icon: mdi:alert-circle-outline
+
 input_button:
   mower_mow_now:
     name: "Mower - Mow Now"
@@ -105,6 +94,12 @@ input_datetime:
     has_date: false
     has_time: true
     initial: "09:30:00"
+
+  mower_end_time:
+    name: "Mower - End Time"
+    has_date: false
+    has_time: true
+    initial: "20:00:00"
 
 input_text:
   mower_calendar_event_time:
@@ -172,10 +167,22 @@ template:
         unique_id: mower_block_reason
         icon: mdi:information-outline
         state: >
+          {% set s = states('input_datetime.mower_start_time') %}
+          {% set sh = s[0:2] | int %}
+          {% set sm = s[3:5] | int %}
+          {% set e = states('input_datetime.mower_end_time') %}
+          {% set eh = e[0:2] | int %}
+          {% set em = e[3:5] | int %}
+          {% set after_start = now().hour > sh or (now().hour == sh and now().minute >= sm) %}
+          {% set before_end = now().hour < eh or (now().hour == eh and now().minute < em) %}
           {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
           {% set mins_since_rain = ((now().timestamp() - last_rain_ts) / 60) | int if last_rain_ts > 0 else 999 %}
           {% set dry_at = (last_rain_ts + 7200) | timestamp_custom('%H:%M') if last_rain_ts > 0 else '' %}
-          {% if is_state('binary_sensor.gw2000a_rain_state_piezo', 'on') %}
+          {% if not after_start %}
+            Outside mowing hours — starts at {{ s[0:5] }}
+          {% elif not before_end %}
+            Outside mowing hours — resumes tomorrow at {{ s[0:5] }}
+          {% elif is_state('binary_sensor.gw2000a_rain_state_piezo', 'on') %}
             Raining now
           {% elif last_rain_ts > 0 and mins_since_rain < 120 %}
             Post-rain lockout — {{ mins_since_rain }} min ago, dry by {{ dry_at }}
@@ -191,6 +198,8 @@ template:
             Soil too wet ({{ states('sensor.gw2000a_soil_moisture_3') }}%)
           {% elif states('sensor.dave_iii_battery') | int(0) <= 20 %}
             Battery low ({{ states('sensor.dave_iii_battery') }}%) — charging
+          {% elif states('sensor.dave_iii_position_mode') | lower == 'none' %}
+            OK to mow — no RTK fix (boundary tracking degraded)
           {% else %}
             OK to mow
           {% endif %}
@@ -209,12 +218,17 @@ template:
             {% set last = states('input_datetime.mower_last_completed') %}
             {% set mowed_today = last not in ['unknown', 'unavailable', '']
                                  and (last | as_datetime).date() == now().date() %}
+            {% set e = states('input_datetime.mower_end_time') %}
+            {% set end_hour = e[0:2] | int %}
+            {% set end_minute = e[3:5] | int %}
+            {% set after_start = now().hour > mow_hour or (now().hour == mow_hour and now().minute >= mow_minute) %}
+            {% set before_end = now().hour < end_hour or (now().hour == end_hour and now().minute < end_minute) %}
             {% set retry_active = now().weekday() in mow_days
-                                  and (now().hour > mow_hour or (now().hour == mow_hour and now().minute >= mow_minute))
-                                  and now().hour < 20
+                                  and after_start
+                                  and before_end
                                   and not mowed_today %}
             {% if retry_active %}
-              Retrying — today until 20:00
+              Retrying — today until {{ e[0:5] }}
             {% else %}
               {% set ns = namespace(found=false, result='Unknown') %}
               {% for i in range(8) %}
@@ -389,7 +403,12 @@ automation:
           {% set t = states('input_datetime.mower_start_time') %}
           {% set h = t[0:2] | int %}
           {% set m = t[3:5] | int %}
-          {{ (now().hour > h or (now().hour == h and now().minute >= m)) and now().hour < 20 }}
+          {% set e = states('input_datetime.mower_end_time') %}
+          {% set eh = e[0:2] | int %}
+          {% set em = e[3:5] | int %}
+          {% set after_start = now().hour > h or (now().hour == h and now().minute >= m) %}
+          {% set before_end = now().hour < eh or (now().hour == eh and now().minute < em) %}
+          {{ after_start and before_end }}
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
         state: "off"
@@ -636,7 +655,7 @@ automation:
                     entity_id: sensor.dave_iii_last_error_code
                     state: "1415"
             sequence:
-              - action: notify.mobile_app_oneplus_11
+              - action: !secret mower_notify_service
                 data:
                   title: "✅ Dave III - Ready to Mow"
                   message: "Conditions are good. Do you want to start mowing now?"
@@ -652,7 +671,7 @@ automation:
                   title: "✅ Dave III - Ready to Mow"
                   message: "Conditions are good. Tap **Start Mowing** in the notification on your phone to begin, or dismiss to cancel."
         default:
-          - action: notify.mobile_app_oneplus_11
+          - action: !secret mower_notify_service
             data:
               title: "⛔ Dave III - Can't Mow Yet"
               message: "{{ states('sensor.mower_block_reason') }}"
@@ -757,6 +776,7 @@ automation:
       - trigger: state
         entity_id: lawn_mower.dave_iii
         from: "docked"
+        not_to: "unavailable"
     conditions:
       - condition: template
         value_template: >
@@ -818,7 +838,9 @@ automation:
           title: "▶️ Dave III - Mowing Started"
           message: >
             Dave III has started mowing.
+            Zone: {{ states('sensor.dave_iii_work_area') }}
             Battery: {{ states('sensor.dave_iii_battery') }}%
+            RTK: {{ states('sensor.dave_iii_position_mode') }}
             Solar: {{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
             Wind: {{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
             Rain chance: {{ states('sensor.mower_rain_probability') }}%
@@ -827,7 +849,9 @@ automation:
           content: >-
             {{ "**▶️ Dave III - Mowing Started**\n"
                ~ "Dave III has started mowing.\n"
+               ~ "Zone: " ~ states('sensor.dave_iii_work_area') ~ "\n"
                ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%\n"
+               ~ "RTK: " ~ states('sensor.dave_iii_position_mode') ~ "\n"
                ~ "Solar: " ~ (states('sensor.gw2000a_solar_radiation') | round(0)) ~ " W/m²\n"
                ~ "Wind: " ~ (states('sensor.gw2000a_wind_speed') | round(1)) ~ " mph\n"
                ~ "Rain chance: " ~ states('sensor.mower_rain_probability') ~ "%" }}
@@ -1268,3 +1292,78 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.mower_calendar_mow_requested
+
+
+  # ---------------------------------------------------------------------------
+  # 19. NOTIFY — BLADE MAINTENANCE DUE
+  # Fires once when blade used time reaches the warn threshold reported by the
+  # mower. The mower_blade_warned flag prevents repeated alerts on every
+  # polling cycle. Reset (automation 20) clears the flag when blade time drops
+  # back near zero after the user replaces the blades.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Notify Blade Maintenance Due"
+    id: mower_notify_blade_maintenance
+    triggers:
+      - trigger: template
+        value_template: >
+          {% set used = states('sensor.dave_iii_blade_used_time') | int(0) %}
+          {% set warn = states('sensor.dave_iii_blade_used_warn_time') | int(0) %}
+          {{ warn > 0 and used >= warn }}
+    conditions:
+      - condition: state
+        entity_id: input_boolean.mower_blade_warned
+        state: "off"
+    actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Blade Maintenance | TRIGGERED |
+            blade_used={{ states('sensor.dave_iii_blade_used_time') }}s
+            blade_warn={{ states('sensor.dave_iii_blade_used_warn_time') }}s
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.mower_blade_warned
+      - action: telegram_bot.send_message
+        data:
+          entity_id:
+            - !secret telegram_notify_service
+          title: "🔧 Dave III - Blade Maintenance Due"
+          message: >
+            Dave III's blades have reached the maintenance threshold and should be replaced or inspected.
+            Blade time: {{ (states('sensor.dave_iii_blade_used_time') | int(0) / 3600) | round(1) }} hours
+      - action: rest_command.discord_webhook
+        data:
+          content: >-
+            {{ "**🔧 Dave III - Blade Maintenance Due**\n"
+               ~ "Dave III's blades have reached the maintenance threshold and should be replaced or inspected.\n"
+               ~ "Blade time: " ~ ((states('sensor.dave_iii_blade_used_time') | int(0) / 3600) | round(1)) ~ " hours" }}
+
+
+  # ---------------------------------------------------------------------------
+  # 20. RESET BLADE MAINTENANCE FLAG AFTER BLADE REPLACEMENT
+  # Clears the mower_blade_warned flag when blade used time resets to near zero
+  # (i.e. after the user replaces blades and the mower resets the counter).
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Reset Blade Maintenance Flag"
+    id: mower_reset_blade_maintenance
+    triggers:
+      - trigger: template
+        value_template: >
+          {% set used = states('sensor.dave_iii_blade_used_time') | int(0) %}
+          {% set warn = states('sensor.dave_iii_blade_used_warn_time') | int(0) %}
+          {{ warn > 0 and used < (warn * 0.1) }}
+    conditions:
+      - condition: state
+        entity_id: input_boolean.mower_blade_warned
+        state: "on"
+    actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | Blade Maintenance | FLAG RESET |
+            blade_used={{ states('sensor.dave_iii_blade_used_time') }}s
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.mower_blade_warned

@@ -1,3 +1,5 @@
 /.claude
 dashboard.yaml
 *.json
+/PyMammotion-main
+/Mammotion-HA-main

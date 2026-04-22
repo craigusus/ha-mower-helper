@@ -216,3 +216,4 @@ The following are outside the control of this package and depend on the Mammotio
 | 18 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |
 | 19 | Mower - Notify Blade Maintenance Due | Telegram + Discord alert once when blade time reaches the mower's warn threshold |
 | 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |
+| 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when a stale GATT handle error is detected; 10-minute cooldown prevents repeated reboots |

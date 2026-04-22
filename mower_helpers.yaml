@@ -1367,3 +1367,37 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.mower_blade_warned
+
+
+  # ---------------------------------------------------------------------------
+  # 21. REBOOT BLUETOOTH PROXY ON GATT STALE HANDLE ERROR
+  # Fires when the ESPHome Bluetooth proxy returns an "Invalid handle" error,
+  # which indicates its GATT cache is stale after the mower reconnects.
+  # Rebooting the proxy clears the cache and forces fresh GATT discovery.
+  # Cooldown of 10 minutes prevents repeated reboots if the error persists.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Reboot BLE Proxy on GATT Error"
+    id: mower_reboot_ble_proxy_gatt_error
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: event
+        event_type: system_log_event
+        event_data:
+          level: ERROR
+          name: pymammotion.messaging.command_queue
+    conditions:
+      - condition: template
+        value_template: >
+          {{ 'Invalid handle' in trigger.event.data.message }}
+    actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: >
+            MOWER | BLE Proxy Reboot | TRIGGERED |
+            reason=GATT stale handle error detected
+      - action: button.press
+        target:
+          entity_id: button.bluetooth_proxy_shed_reboot_shed_proxy
+      - delay: "00:10:00"

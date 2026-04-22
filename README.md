@@ -217,4 +217,4 @@ The following are outside the control of this package and depend on the Mammotio
 | 18 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |
 | 19 | Mower - Notify Blade Maintenance Due | Telegram + Discord alert once when blade time reaches the mower's warn threshold |
 | 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |
-| 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when `Invalid handle` appears in a `pymammotion.messaging.command_queue` ERROR log (checks both `message` and `exception` fields); 10-minute cooldown prevents repeated reboots |
+| 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when a stale GATT handle error is detected — triggers on `WARNING` from `pymammotion.transport.ble` (patched fork) or `ERROR` from `pymammotion.messaging.command_queue` (upstream); 10-minute cooldown prevents repeated reboots |

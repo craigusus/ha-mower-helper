@@ -1384,12 +1384,18 @@ automation:
       - trigger: event
         event_type: system_log_event
         event_data:
+          level: WARNING
+          name: pymammotion.transport.ble
+      - trigger: event
+        event_type: system_log_event
+        event_data:
           level: ERROR
           name: pymammotion.messaging.command_queue
     conditions:
       - condition: template
         value_template: >
-          {{ 'Invalid handle' in trigger.event.data.get('exception', '')
+          {{ 'stale GATT handle' in (trigger.event.data.message | join(' '))
+             or 'Invalid handle' in trigger.event.data.get('exception', '')
              or 'Invalid handle' in (trigger.event.data.message | join(' ')) }}
     actions:
       - action: system_log.write

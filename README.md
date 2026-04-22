@@ -188,6 +188,7 @@ The following are outside the control of this package and depend on the Mammotio
 - **`sensor.dave_iii_time_left`** — Can briefly drop to 0 between polling updates while mowing, causing `sensor.mower_estimated_finish` to flicker. Guarded by also checking the mower is in `mowing` state.
 - **`binary_sensor.dave_iii_charging`** — If reported incorrectly, scheduled and calendar mows may silently fail their precondition check.
 - **MowPathSaga empty path (error 1415)** — The Mammotion integration occasionally starts a mow with an empty zone/line list (`line hash list was empty — falling back to zone_hashs=[]`), causing the mower to leave the dock and return immediately. Diagnostics confirm the map data is present but `work.zone_hashs` is populated with zeros — a pymammotion library bug. The 1-minute pre-start delay is a workaround. All mowing automations also block if `sensor.dave_iii_last_error_code` is `1415` to prevent repeated failed attempts.
+- **BLE GATT stale handle error** — After the mower disconnects (BLE sleep in dock) and reconnects, the ESPHome Bluetooth proxy may return a stale GATT attribute handle, causing repeated `BluetoothGATTAPIError: Invalid handle` errors logged by `pymammotion.messaging.command_queue`. Automation 21 detects this and reboots the proxy (10-minute cooldown). The root cause is in the pymammotion BLE transport: on `start_notify` failure the stale client was not cleared, so reconnect attempts kept reusing it. The fix is in the `craigusus/PyMammotion` fork — `start_notify` errors now force a clean disconnect so the next retry gets fresh GATT discovery.
 
 ---
 
@@ -216,4 +217,4 @@ The following are outside the control of this package and depend on the Mammotio
 | 18 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |
 | 19 | Mower - Notify Blade Maintenance Due | Telegram + Discord alert once when blade time reaches the mower's warn threshold |
 | 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |
-| 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when a stale GATT handle error is detected; 10-minute cooldown prevents repeated reboots |
+| 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when `Invalid handle` appears in a `pymammotion.messaging.command_queue` ERROR log (checks both `message` and `exception` fields); 10-minute cooldown prevents repeated reboots |

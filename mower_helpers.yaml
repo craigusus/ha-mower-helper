@@ -1389,7 +1389,8 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ 'Invalid handle' in trigger.event.data.message }}
+          {{ 'Invalid handle' in trigger.event.data.get('exception', '')
+             or 'Invalid handle' in (trigger.event.data.message | join(' ')) }}
     actions:
       - action: system_log.write
         data:

@@ -24,9 +24,6 @@ Add these entries to your Home Assistant `secrets.yaml`:
 # Mobile app notify service — found under Settings → Devices & Services → Companion App
 mower_notify_service: "notify.mobile_app_your_phone"
 
-# Telegram — entity ID from your Telegram bot integration
-telegram_notify_service: "telegram_bot.send_message_YOUR_CHAT_ID"
-
 # Discord — webhook URL from a Discord channel
 # Channel Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL
 discord_webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
@@ -44,7 +41,6 @@ If you don't use all of the above, comment out the relevant actions in `mower_he
 | Service | Used in automations | What to comment out |
 |---|---|---|
 | Mobile app (push notifications) | 7 (Can I Mow?) | `action: !secret mower_notify_service` blocks in automations 7 and 7a |
-| Telegram | 4, 7, 9, 10, 11, 12, 13, 14, 17 | Every `action: telegram_bot.send_message` block |
 | Discord | 4, 7, 9, 10, 11, 12, 13, 14, 17 | Every `action: rest_command.discord_webhook` block |
 | Google Calendar | 15, 16, 17 | Automations 15 and 16 entirely; the calendar trigger in 17 |
 
@@ -80,7 +76,7 @@ Create a Google Calendar event with **"mow" anywhere in the title** (e.g. "Mow g
 
 - Checks all weather conditions and battery
 - If conditions are met, starts immediately
-- If not, sends a Telegram notification and retries every 30 minutes until 20:00
+- If not, sends a Discord notification and retries every 30 minutes until 20:00
 - Blocked by Holiday Mode
 - Won't run if already mowed today
 - The retry flag is cleared automatically at midnight
@@ -95,7 +91,7 @@ Still blocked by:
 - Error code 1415 (Mammotion empty path error)
 
 ### 5. Can I Mow? (manual button)
-A dashboard button that checks **all** conditions including weather forecast and drying. If clear, sends an actionable push notification to your phone and a persistent HA notification asking you to confirm before mowing starts. Tapping **Start Mowing** in the notification starts the mower; tapping **Cancel** or dismissing does nothing. If conditions aren't met, sends the block reason via push notification, persistent notification, Telegram, and Discord.
+A dashboard button that checks **all** conditions including weather forecast and drying. If clear, sends an actionable push notification to your phone and a persistent HA notification asking you to confirm before mowing starts. Tapping **Start Mowing** in the notification starts the mower; tapping **Cancel** or dismissing does nothing. If conditions aren't met, sends the block reason via push notification, persistent notification, and Discord.
 
 ---
 
@@ -128,9 +124,9 @@ When Holiday Mode is on, `sensor.mower_next_scheduled` displays "Holiday Mode" i
 
 ---
 
-## Notifications (Telegram + Discord)
+## Notifications (Discord)
 
-Both Telegram and Discord notifications are sent for all events. Each requires its own secret (see [Secrets](#secrets)).
+Discord notifications are sent for all events via webhook (see [Secrets](#secrets)).
 
 | Event | Message |
 |---|---|
@@ -183,7 +179,7 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 
 The following are outside the control of this package and depend on the Mammotion integration's polling behaviour:
 
-- **State reporting delay** — HA may detect the `mowing` state significantly later than the actual start. This affects `mower_started_at`, calendar event start times, and duration calculations in Telegram and Discord notifications.
+- **State reporting delay** — HA may detect the `mowing` state significantly later than the actual start. This affects `mower_started_at`, calendar event start times, and duration calculations in Discord notifications.
 - **`sensor.dave_iii_time_left`** — Can briefly drop to 0 between polling updates while mowing, causing `sensor.mower_estimated_finish` to flicker. Guarded by also checking the mower is in `mowing` state.
 - **`binary_sensor.dave_iii_charging`** — If reported incorrectly, scheduled and calendar mows may silently fail their precondition check.
 - **MowPathSaga empty path (error 1415)** — The Mammotion integration occasionally starts a mow with an empty zone/line list (`line hash list was empty — falling back to zone_hashs=[]`), causing the mower to leave the dock and return immediately. Diagnostics confirm the map data is present but `work.zone_hashs` is populated with zeros — a pymammotion library bug. The 1-minute pre-start delay is a workaround. All mowing automations also block if `sensor.dave_iii_last_error_code` is `1415` to prevent repeated failed attempts.
@@ -204,12 +200,12 @@ The following are outside the control of this package and depend on the Mammotio
 | 7 | Mower - Can I Mow Check | Weather-aware manual check — sends actionable notification to confirm, or notifies with block reason |
 | 7a | Mower - Confirm Mow Action | Fires when user taps "Start Mowing" on the Can I Mow? notification; starts mower and clears persistent notification |
 | 8 | Mower - Create Calendar Event | Records mow start time; sets calendar event start marker |
-| 9 | Mower - Notify Left Dock Without Mowing | Telegram + Discord notification if mower leaves dock but never reaches mowing state |
-| 10 | Mower - Notify Started | Telegram + Discord notification when mowing begins |
-| 11 | Mower - Notify Completed | Telegram + Discord notification when mowing finishes (>5 min run, not already completed today) |
-| 12 | Mower - Notify Aborted Early | Telegram + Discord notification when mower starts but returns within 5 min (GPS/boundary abort) |
-| 13 | Mower - Notify Error | Telegram + Discord notification on error state |
-| 14 | Mower - Notify Paused | Telegram + Discord notification when paused mid-mow |
+| 9 | Mower - Notify Left Dock Without Mowing | Discord notification if mower leaves dock but never reaches mowing state |
+| 10 | Mower - Notify Started | Discord notification when mowing begins |
+| 11 | Mower - Notify Completed | Discord notification when mowing finishes (>5 min run, not already completed today) |
+| 12 | Mower - Notify Aborted Early | Discord notification when mower starts but returns within 5 min (GPS/boundary abort) |
+| 13 | Mower - Notify Error | Discord notification on error state |
+| 14 | Mower - Notify Paused | Discord notification when paused mid-mow |
 | 15 | Mower - Update Calendar Event Duration | Creates accurate calendar event on completion (>5 min run only) |
 | 16 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar; queries calendar via `calendar.get_events` to prevent duplicate placeholders |
 | 17 | Mower - Calendar Triggered Mow | Fires on calendar events with "mow" in title (excluding "Dave III - Mow Scheduled") |

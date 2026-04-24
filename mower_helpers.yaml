@@ -506,14 +506,6 @@ automation:
       - action: lawn_mower.dock
         target:
           entity_id: lawn_mower.dave_iii
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "⬇️ Dave III - Returning to Dock"
-          message: >
-            Rain detected! Dave III is heading back to the dock.
-            Rain rate: {{ states('sensor.gw2000a_rain_rate_piezo') }} mm/h
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -667,12 +659,6 @@ automation:
               notification_id: mower_can_i_mow
               title: "⛔ Dave III - Can't Mow Yet"
               message: "{{ states('sensor.mower_block_reason') }}"
-          - action: telegram_bot.send_message
-            data:
-              entity_id:
-                - !secret telegram_notify_service
-              title: "⛔ Dave III - Can't Mow Yet"
-              message: "{{ states('sensor.mower_block_reason') }}"
           - action: rest_command.discord_webhook
             data:
               content: >-
@@ -780,15 +766,6 @@ automation:
       - condition: template
         value_template: >
           {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning', 'docked'] }}
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "⚠️ Dave III - Left Dock"
-          message: >
-            Dave III left the dock but hasn't started mowing.
-            Current state: {{ states('lawn_mower.dave_iii') }}
-            Battery: {{ states('sensor.dave_iii_battery') }}%
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -818,19 +795,6 @@ automation:
             solar={{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
             wind={{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
             rain_prob={{ states('sensor.mower_rain_probability') }}%
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "▶️ Dave III - Mowing Started"
-          message: >
-            Dave III has started mowing.
-            Zone: {{ states('sensor.dave_iii_work_area') }}
-            Battery: {{ states('sensor.dave_iii_battery') }}%
-            RTK: {{ states('sensor.dave_iii_position_mode') }}
-            Solar: {{ states('sensor.gw2000a_solar_radiation') | round(0) }} W/m²
-            Wind: {{ states('sensor.gw2000a_wind_speed') | round(1) }} mph
-            Rain chance: {{ states('sensor.mower_rain_probability') }}%
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -874,17 +838,6 @@ automation:
             battery={{ states('sensor.dave_iii_battery') }}%
             area={{ states('sensor.dave_iii_area') }} m²
             duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "✅ Dave III - Mowing Complete"
-          message: >
-            Dave III has finished mowing and is back on charge.
-            Completed: {{ now().strftime('%H:%M') }}
-            Battery: {{ states('sensor.dave_iii_battery') }}%
-            Area covered: {{ states('sensor.dave_iii_area') }} m²
-            Total time: {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }} min
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -900,7 +853,7 @@ automation:
   # 12. NOTIFY — ABORTED EARLY
   # Fires when Dave III docks within 5 minutes of starting a mow.
   # Catches hardware aborts (GPS failure, boundary issue, obstacle) that the
-  # mower resolves itself without entering error state. Sends a Telegram alert
+  # mower resolves itself without entering error state. Sends a Discord alert
   # so the user knows a retry will be attempted.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Notify Aborted Early"
@@ -925,16 +878,6 @@ automation:
             battery={{ states('sensor.dave_iii_battery') }}%
             duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
             started_at={{ states('input_datetime.mower_started_at') }}
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "⚠️ Dave III - Aborted Early"
-          message: >
-            Dave III started mowing but returned to dock after
-            {{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }} min.
-            Battery: {{ states('sensor.dave_iii_battery') }}%
-            Will retry at the next 30-minute interval if conditions are still met.
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -965,16 +908,6 @@ automation:
             error={{ states('sensor.dave_iii_last_error') }}
             error_time={{ states('sensor.dave_iii_last_error_time') }}
             battery={{ states('sensor.dave_iii_battery') }}%
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "⚠️ Dave III - Error"
-          message: >
-            Dave III has reported an error and may need attention.
-            Error: {{ states('sensor.dave_iii_last_error') }}
-            Time: {{ states('sensor.dave_iii_last_error_time') }}
-            Battery: {{ states('sensor.dave_iii_battery') }}%
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -1005,15 +938,6 @@ automation:
             progress={{ states('sensor.dave_iii_progress') }}%
             battery={{ states('sensor.dave_iii_battery') }}%
             area={{ states('sensor.dave_iii_area') }} m²
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "⏸️ Dave III - Paused"
-          message: >
-            Dave III has paused mid-mow.
-            Progress: {{ states('sensor.dave_iii_progress') }}%
-            Battery: {{ states('sensor.dave_iii_battery') }}%
       - action: rest_command.discord_webhook
         data:
           content: >-
@@ -1181,7 +1105,7 @@ automation:
   # 17. CALENDAR-TRIGGERED MOW
   # Fires when a Google Calendar event whose title contains "mow" starts.
   # Sets the calendar-requested flag (enabling retries), then starts mowing
-  # if conditions are met or notifies via Telegram if not.
+  # if conditions are met or notifies via Discord if not.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Calendar Triggered Mow"
     id: mower_calendar_triggered_mow
@@ -1241,15 +1165,6 @@ automation:
                 target:
                   entity_id: lawn_mower.dave_iii
         default:
-          - action: telegram_bot.send_message
-            data:
-              entity_id:
-                - !secret telegram_notify_service
-              title: "⏳ Dave III - Calendar Mow Delayed"
-              message: >
-                Calendar mow requested but conditions aren't right yet.
-                Will retry every 30 minutes until 20:00.
-                Reason: {{ states('sensor.mower_block_reason') }}
           - action: rest_command.discord_webhook
             data:
               content: >-
@@ -1311,14 +1226,6 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.mower_blade_warned
-      - action: telegram_bot.send_message
-        data:
-          entity_id:
-            - !secret telegram_notify_service
-          title: "🔧 Dave III - Blade Maintenance Due"
-          message: >
-            Dave III's blades have reached the maintenance threshold and should be replaced or inspected.
-            Blade time: {{ (states('sensor.dave_iii_blade_used_time') | int(0) / 3600) | round(1) }} hours
       - action: rest_command.discord_webhook
         data:
           content: >-

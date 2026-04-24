@@ -270,6 +270,11 @@ template:
               {{ ns.result }}
             {% endif %}
 
+      - name: "Mower Next Scheduled ISO"
+        unique_id: mower_next_scheduled_iso
+        icon: mdi:calendar-clock
+        state: "{{ state_attr('sensor.mower_next_scheduled', 'iso') | default('unknown') }}"
+
       - name: "Mower Estimated Finish"
         unique_id: mower_estimated_finish
         icon: mdi:timer-outline

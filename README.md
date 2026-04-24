@@ -165,7 +165,8 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 
 | Sensor | Example value | Description |
 |---|---|---|
-| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable); shows `Retrying — today until HH:MM` while retries are active. ISO format available as `state_attr('sensor.mower_next_scheduled', 'iso')` |
+| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable); shows `Retrying — today until HH:MM` while retries are active |
+| `sensor.mower_next_scheduled_iso` | `2026-04-10T09:30:00` | Next scheduled mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_estimated_finish` | `2026-04-08T11:45:00` | Estimated mow finish time based on `sensor.dave_iii_time_left` (ISO format, only set while mowing) |
 | `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time (human-readable) |
 | `sensor.mower_last_completed_iso` | `2026-03-29T14:22:00` | Last completed mow time (ISO format, for TimeFlow Card) |

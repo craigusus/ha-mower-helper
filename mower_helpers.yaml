@@ -285,8 +285,8 @@ template:
         unique_id: mower_last_rain_formatted
         icon: mdi:weather-rainy
         state: >
-          {% set dt = states('input_datetime.mower_last_rain') | as_timestamp %}
-          {% if dt %}
+          {% set dt = states('input_datetime.mower_last_rain') | as_timestamp(none) %}
+          {% if dt is not none %}
             {{ dt | timestamp_custom('%H:%M %a %-d %b') }}
           {% else %}
             Never
@@ -296,8 +296,8 @@ template:
         unique_id: mower_last_completed_formatted
         icon: mdi:calendar-clock
         state: >
-          {% set dt = states('input_datetime.mower_last_completed') | as_timestamp %}
-          {% if dt %}
+          {% set dt = states('input_datetime.mower_last_completed') | as_timestamp(none) %}
+          {% if dt is not none %}
             {{ dt | timestamp_custom('%H:%M %a %-d %b') }}
           {% else %}
             Unknown
@@ -307,8 +307,8 @@ template:
         unique_id: mower_last_completed_iso
         icon: mdi:calendar-clock
         state: >
-          {% set dt = states('input_datetime.mower_last_completed') | as_timestamp %}
-          {% if dt %}
+          {% set dt = states('input_datetime.mower_last_completed') | as_timestamp(none) %}
+          {% if dt is not none %}
             {{ dt | timestamp_custom('%Y-%m-%dT%H:%M:%S') }}
           {% else %}
             unknown
@@ -846,7 +846,7 @@ automation:
                ~ "Completed: " ~ now().strftime('%H:%M') ~ "\n"
                ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%\n"
                ~ "Area covered: " ~ states('sensor.dave_iii_area') ~ " m²\n"
-               ~ "Total time: " ~ (((now().timestamp() - (states('input_datetime.mower_started_at') | as_timestamp)) / 60) | int) ~ " min" }}
+               ~ "Total time: " ~ (((now().timestamp() - (states('input_datetime.mower_started_at') | as_timestamp(0))) / 60) | int) ~ " min" }}
 
 
   # ---------------------------------------------------------------------------
@@ -984,7 +984,7 @@ automation:
             area={{ states('sensor.dave_iii_area') }} m²
             battery={{ states('sensor.dave_iii_battery') }}%
       - variables:
-          duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp) / 60) | int }}"
+          duration_mins: "{{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }}"
       - action: calendar.create_event
         target:
           entity_id: !secret mower_calendar

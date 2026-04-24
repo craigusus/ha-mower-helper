@@ -160,7 +160,10 @@ template:
           {# --- Mower battery --- #}
           {% set battery_ok = states('sensor.dave_iii_battery') | int(0) > 20 %}
 
-          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and drying_ok and soil_ok and battery_ok }}
+          {# --- Hardware error block --- #}
+          {% set no_critical_error = not is_state('sensor.dave_iii_last_error_code', '1415') %}
+
+          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and drying_ok and soil_ok and battery_ok and no_critical_error }}
 
   - sensor:
       - name: "Mower Block Reason"
@@ -178,7 +181,9 @@ template:
           {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
           {% set mins_since_rain = ((now().timestamp() - last_rain_ts) / 60) | int if last_rain_ts > 0 else 999 %}
           {% set dry_at = (last_rain_ts + 7200) | timestamp_custom('%H:%M') if last_rain_ts > 0 else '' %}
-          {% if not after_start %}
+          {% if is_state('sensor.dave_iii_last_error_code', '1415') %}
+            Hardware error 1415 — check mower
+          {% elif not after_start %}
             Outside mowing hours — starts at {{ s[0:5] }}
           {% elif not before_end %}
             Outside mowing hours — resumes tomorrow at {{ s[0:5] }}
@@ -349,11 +354,6 @@ automation:
           {% else %}
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
-      - condition: not
-        conditions:
-          - condition: state
-            entity_id: sensor.dave_iii_last_error_code
-            state: "1415"
     actions:
       - action: system_log.write
         data:
@@ -426,11 +426,6 @@ automation:
           {% else %}
             {{ (last | as_datetime).date() < now().date() }}
           {% endif %}
-      - condition: not
-        conditions:
-          - condition: state
-            entity_id: sensor.dave_iii_last_error_code
-            state: "1415"
     actions:
       - action: system_log.write
         data:
@@ -646,11 +641,6 @@ automation:
               - condition: template
                 value_template: >
                   {{ states('lawn_mower.dave_iii') not in ['mowing', 'returning'] }}
-              - condition: not
-                conditions:
-                  - condition: state
-                    entity_id: sensor.dave_iii_last_error_code
-                    state: "1415"
             sequence:
               - action: !secret mower_notify_service
                 data:

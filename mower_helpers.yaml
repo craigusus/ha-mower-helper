@@ -243,30 +243,27 @@ template:
               {{ ns.result }}
             {% endif %}
           {% endif %}
-
-      - name: "Mower Next Scheduled ISO"
-        unique_id: mower_next_scheduled_iso
-        icon: mdi:calendar-clock
-        state: >
-          {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
-            unknown
-          {% else %}
-            {% set mow_days = states('sensor.mower_mow_days') | from_json %}
-            {% set t = states('input_datetime.mower_start_time') %}
-            {% set mow_hour = t[0:2] | int %}
-            {% set mow_minute = t[3:5] | int %}
-            {% set ns = namespace(found=false, result='unknown') %}
-            {% for i in range(8) %}
-              {% if not ns.found %}
-                {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
-                {% if candidate.weekday() in mow_days and candidate > now() %}
-                  {% set ns.found = true %}
-                  {% set ns.result = candidate.strftime('%Y-%m-%dT%H:%M:%S') %}
+        attributes:
+          iso: >
+            {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
+              unknown
+            {% else %}
+              {% set mow_days = states('sensor.mower_mow_days') | from_json %}
+              {% set t = states('input_datetime.mower_start_time') %}
+              {% set mow_hour = t[0:2] | int %}
+              {% set mow_minute = t[3:5] | int %}
+              {% set ns = namespace(found=false, result='unknown') %}
+              {% for i in range(8) %}
+                {% if not ns.found %}
+                  {% set candidate = now().replace(hour=mow_hour, minute=mow_minute, second=0, microsecond=0) + timedelta(days=i) %}
+                  {% if candidate.weekday() in mow_days and candidate > now() %}
+                    {% set ns.found = true %}
+                    {% set ns.result = candidate.strftime('%Y-%m-%dT%H:%M:%S') %}
+                  {% endif %}
                 {% endif %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.result }}
-          {% endif %}
+              {% endfor %}
+              {{ ns.result }}
+            {% endif %}
 
       - name: "Mower Estimated Finish"
         unique_id: mower_estimated_finish

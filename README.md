@@ -91,7 +91,7 @@ Still blocked by:
 - Error code 1415 (Mammotion empty path error)
 
 ### 5. Can I Mow? (manual button)
-A dashboard button that checks **all** conditions including weather forecast and drying. If clear, sends an actionable push notification to your phone and a persistent HA notification asking you to confirm before mowing starts. Tapping **Start Mowing** in the notification starts the mower; tapping **Cancel** or dismissing does nothing. If conditions aren't met, sends the block reason via push notification, persistent notification, and Discord.
+A dashboard button that checks **all** mowing conditions including weather forecast, drying, and visual positioning. If clear, sends an actionable push notification to your phone and a persistent HA notification asking you to confirm before mowing starts. Tapping **Start Mowing** in the notification starts the mower; tapping **Cancel** or dismissing does nothing. If conditions aren't met, sends the block reason via push notification, persistent notification, and Discord.
 
 ---
 

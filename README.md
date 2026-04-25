@@ -60,7 +60,7 @@ Fires at the configured start time on enabled mow days.
 - Toggle mow days via `input_boolean.mower_day_*` helpers in the UI (Mon–Sun)
 
 Checks before starting:
-- All weather conditions are met (see [Conditions](#conditions))
+- All mowing conditions are met (see [Conditions](#conditions))
 - Mower is docked and charging
 - Mower is not already mowing or returning
 - Holiday Mode is off
@@ -97,7 +97,7 @@ A dashboard button that checks **all** conditions including weather forecast and
 
 ## Conditions
 
-All automated and calendar triggers check these before mowing:
+All automated and calendar triggers check these conditions before mowing:
 
 | Condition | Threshold |
 |---|---|

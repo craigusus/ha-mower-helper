@@ -40,11 +40,11 @@ If you don't use all of the above, comment out the relevant actions in `mower_he
 
 | Service | Used in automations | What to comment out |
 |---|---|---|
-| Mobile app (push notifications) | 7 (Can I Mow?) | `action: !secret mower_notify_service` blocks in automations 7 and 7a |
-| Discord | 4, 7, 9, 10, 11, 12, 13, 14, 17 | Every `action: rest_command.discord_webhook` block |
+| Mobile app (push notifications) | 7 (Can I Mow?) | `action: !secret mower_notify_service` blocks in automation 7 only |
+| Discord | 4, 7, 9, 10, 11, 12, 13, 14, 17, 19 | Every `action: rest_command.discord_webhook` block |
 | Google Calendar | 15, 16, 17 | Automations 15 and 16 entirely; the calendar trigger in 17 |
 
-> If you remove all calendar automations (15, 16, 17), you can also remove `mower_calendar_event_time` and `mower_scheduled_event_time` from the `input_text` section, and the `rest_command` block at the top.
+> If you remove all calendar automations (15, 16, 17), you can also remove `mower_calendar_event_time` and `mower_scheduled_event_time` from the `input_text` section. The `rest_command` block is also used by Discord notifications in other automations — only remove it if you remove Discord entirely.
 
 ---
 
@@ -74,7 +74,7 @@ If conditions aren't met at the scheduled time, or if the mower aborts early, th
 ### 3. Calendar trigger
 Create a Google Calendar event with **"mow" anywhere in the title** (e.g. "Mow garden", "Dave III mow") at the time you want it to start.
 
-- Checks all weather conditions and battery
+- Checks all mowing conditions and battery
 - If conditions are met, starts immediately
 - If not, sends a Discord notification and retries every 30 minutes until 20:00
 - Blocked by Holiday Mode

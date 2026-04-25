@@ -111,6 +111,7 @@ All automated and calendar triggers check these before mowing:
 | Soil moisture | < 70% (`sensor.gw2000a_soil_moisture_3`) |
 | Battery | > 20% |
 | Error code | Not 1415 (Mammotion empty path error) |
+| Visual positioning | Not `SIGNAL_BAD` |
 
 Wind speed thresholds assume **mph**. 4.5 mph ≈ 2 m/s (light breeze).
 
@@ -171,7 +172,7 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 | `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time (human-readable) |
 | `sensor.mower_last_completed_iso` | `2026-03-29T14:22:00` | Last completed mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_last_rain_formatted` | `11:45 Fri 28 Mar` | Last detected rain time |
-| `sensor.mower_block_reason` | `Post-rain lockout — 45 min ago, dry by 13:45` | Why mowing is currently blocked (or "OK to mow"); shows `Outside mowing hours` when outside the configured start/end window; shows `OK to mow — no RTK fix` when all conditions are met but GPS positioning is degraded |
+| `sensor.mower_block_reason` | `Post-rain lockout — 45 min ago, dry by 13:45` | Why mowing is currently blocked (or "OK to mow"); shows `Outside mowing hours` when outside the configured start/end window; shows `OK to mow — no RTK fix` when GPS positioning is degraded; shows `Visual positioning error` when camera positioning is bad; shows `OK to mow — no visual positioning signal` when visual signal is absent |
 | `binary_sensor.mower_ok_to_mow` | `on` / `off` | All conditions met or not |
 
 ---

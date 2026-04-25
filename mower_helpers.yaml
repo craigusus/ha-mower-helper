@@ -163,7 +163,10 @@ template:
           {# --- Hardware error block --- #}
           {% set no_critical_error = not is_state('sensor.dave_iii_last_error_code', '1415') %}
 
-          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and drying_ok and soil_ok and battery_ok and no_critical_error }}
+          {# --- Visual positioning --- #}
+          {% set good_visual = not is_state('sensor.dave_iii_visual_positioning_status', 'SIGNAL_BAD') %}
+
+          {{ not_raining and low_rain_rate and post_rain_ok and low_precip_prob and drying_ok and soil_ok and battery_ok and no_critical_error and good_visual }}
 
   - sensor:
       - name: "Mower Block Reason"
@@ -183,6 +186,8 @@ template:
           {% set dry_at = (last_rain_ts + 7200) | timestamp_custom('%H:%M') if last_rain_ts > 0 else '' %}
           {% if is_state('sensor.dave_iii_last_error_code', '1415') %}
             Hardware error 1415 — check mower
+          {% elif is_state('sensor.dave_iii_visual_positioning_status', 'SIGNAL_BAD') %}
+            Visual positioning error — check camera
           {% elif not after_start %}
             Outside mowing hours — starts at {{ s[0:5] }}
           {% elif not before_end %}
@@ -205,6 +210,8 @@ template:
             Battery low ({{ states('sensor.dave_iii_battery') }}%) — charging
           {% elif states('sensor.dave_iii_position_mode') | lower == 'none' %}
             OK to mow — no RTK fix (boundary tracking degraded)
+          {% elif is_state('sensor.dave_iii_visual_positioning_status', 'SIGNAL_NONE') %}
+            OK to mow — no visual positioning signal
           {% else %}
             OK to mow
           {% endif %}

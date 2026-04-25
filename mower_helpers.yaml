@@ -21,6 +21,18 @@ rest_command:
 
 
 # -----------------------------------------------------------------------------
+# SHELL COMMANDS
+# Secret required:  mower_update_command
+# Full curl command stored as secret so each user points at their own fork.
+# Example value:
+#   curl -sSf https://raw.githubusercontent.com/YOUR_USER/ha-mower-helper/main/mower_helpers.yaml
+#   -o /config/mower/mower_helpers.yaml
+# -----------------------------------------------------------------------------
+shell_command:
+  update_mower_helpers: !secret mower_update_command
+
+
+# -----------------------------------------------------------------------------
 # INPUT HELPERS
 # -----------------------------------------------------------------------------
 input_boolean:
@@ -72,6 +84,10 @@ input_button:
   mower_can_i_mow:
     name: "Mower - Can I Mow?"
     icon: mdi:help-circle-outline
+
+  mower_update_config:
+    name: "Mower - Update Config"
+    icon: mdi:cloud-download-outline
 
 input_datetime:
   mower_last_completed:
@@ -1314,3 +1330,39 @@ automation:
         target:
           entity_id: button.bluetooth_proxy_shed_reboot_shed_proxy
       - delay: "00:10:00"
+
+
+  # ---------------------------------------------------------------------------
+  # 22. UPDATE CONFIG FROM GITHUB
+  # Downloads mower_helpers.yaml from the URL in mower_update_command secret
+  # and reloads all HA config sections without a full restart.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Update Config from GitHub"
+    id: mower_update_config
+    triggers:
+      - trigger: state
+        entity_id: input_button.mower_update_config
+    actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: "MOWER | Update Config | TRIGGERED"
+      - action: shell_command.update_mower_helpers
+        response_variable: result
+      - if:
+          - condition: template
+            value_template: "{{ result.returncode == 0 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: mower_update_config
+              title: "✅ Mower Config Updated"
+              message: "mower_helpers.yaml downloaded from GitHub. Reloading HA config..."
+          - delay: "00:00:02"
+          - action: homeassistant.reload_all
+        else:
+          - action: persistent_notification.create
+            data:
+              notification_id: mower_update_config
+              title: "❌ Mower Config Update Failed"
+              message: "Failed to download mower_helpers.yaml. Check the mower_update_command secret and HA logs."

@@ -30,6 +30,9 @@ discord_webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBH
 
 # Google Calendar entity ID
 mower_calendar: "calendar.your_google_calendar"
+
+# GitHub update — full curl command pointing at your own fork's raw file URL
+mower_update_command: "curl -sSf https://raw.githubusercontent.com/YOUR_USER/ha-mower-helper/main/mower_helpers.yaml -o /config/mower/mower_helpers.yaml"
 ```
 
 ---
@@ -43,6 +46,7 @@ If you don't use all of the above, comment out the relevant actions in `mower_he
 | Mobile app (push notifications) | 7 (Can I Mow?) | `action: !secret mower_notify_service` blocks in automation 7 only |
 | Discord | 4, 7, 9, 10, 11, 12, 13, 14, 17, 19 | Every `action: rest_command.discord_webhook` block |
 | Google Calendar | 15, 16, 17 | Automations 15 and 16 entirely; the calendar trigger in 17 |
+| GitHub update | 22 | Automation 22 entirely; the `shell_command` block; `input_button.mower_update_config` |
 
 > If you remove all calendar automations (15, 16, 17), you can also remove `mower_calendar_event_time` and `mower_scheduled_event_time` from the `input_text` section. The `rest_command` block is also used by Discord notifications in other automations — only remove it if you remove Discord entirely.
 
@@ -215,3 +219,4 @@ The following are outside the control of this package and depend on the Mammotio
 | 19 | Mower - Notify Blade Maintenance Due | Discord alert once when blade time reaches the mower's warn threshold |
 | 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |
 | 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when a stale GATT handle error is detected — triggers on `WARNING` from `pymammotion.transport.ble` (patched fork) or `ERROR` from `pymammotion.messaging.command_queue` (upstream); 10-minute cooldown prevents repeated reboots |
+| 22 | Mower - Update Config from GitHub | Downloads `mower_helpers.yaml` from the URL in `mower_update_command` secret and reloads all HA config sections without a full restart |

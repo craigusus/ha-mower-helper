@@ -137,7 +137,7 @@ Discord notifications are sent for all events via webhook (see [Secrets](#secret
 |---|---|
 | Left dock without reaching mowing state | Current state and battery |
 | Mowing started | Battery, solar, wind, rain chance |
-| Mowing aborted early (returned <5 min) | Duration and battery; retry will follow |
+| Mowing aborted early (returned <5 min) | Duration and battery; retry will follow (10-min cooldown suppresses duplicate alerts) |
 | Mowing completed | Time, battery, area covered, duration |
 | Docked due to rain | Rain rate at time of return |
 | Calendar mow delayed | Reason conditions weren't met |
@@ -207,9 +207,9 @@ The following are outside the control of this package and depend on the Mammotio
 | 7a | Mower - Confirm Mow Action | Fires when user taps "Start Mowing" on the Can I Mow? notification; starts mower and clears persistent notification |
 | 8 | Mower - Create Calendar Event | Records mow start time; sets calendar event start marker |
 | 9 | Mower - Notify Left Dock Without Mowing | Discord notification if mower leaves dock but never reaches mowing state |
-| 10 | Mower - Notify Started | Discord notification when mowing begins |
+| 10 | Mower - Notify Started | Discord notification when mowing begins (30-second hold-off suppresses ultra-short aborts) |
 | 11 | Mower - Notify Completed | Discord notification when mowing finishes (>5 min run, not already completed today) |
-| 12 | Mower - Notify Aborted Early | Discord notification when mower starts but returns within 5 min (GPS/boundary abort) |
+| 12 | Mower - Notify Aborted Early | Discord notification when mower starts but returns within 5 min (GPS/boundary abort); 10-minute cooldown prevents spam during rapid firmware retry storms |
 | 13 | Mower - Notify Error | Discord notification on error state |
 | 14 | Mower - Notify Paused | Discord notification when paused mid-mow |
 | 15 | Mower - Update Calendar Event Duration | Creates accurate calendar event on completion (>5 min run only) |

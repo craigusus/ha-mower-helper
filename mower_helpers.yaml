@@ -117,6 +117,11 @@ input_datetime:
     has_time: true
     initial: "20:00:00"
 
+  mower_last_abort_notified:
+    name: "Mower - Last Abort Notified"
+    has_date: true
+    has_time: true
+
 input_text:
   mower_calendar_event_time:
     name: "Mower - Calendar Event Time"
@@ -806,6 +811,8 @@ automation:
   # ---------------------------------------------------------------------------
   # 10. NOTIFY — MOWING STARTED
   # Fires on any mowing start (scheduled, Mow Now, or Can I Mow).
+  # 30-second hold-off prevents spam when the mower aborts in under a minute
+  # (e.g. rapid firmware retries after an RTK failure).
   # ---------------------------------------------------------------------------
   - alias: "Mower - Notify Started"
     id: mower_notify_started
@@ -813,6 +820,7 @@ automation:
       - trigger: state
         entity_id: lawn_mower.dave_iii
         to: "mowing"
+        for: "00:00:30"
     actions:
       - action: system_log.write
         data:
@@ -883,6 +891,8 @@ automation:
   # Catches hardware aborts (GPS failure, boundary issue, obstacle) that the
   # mower resolves itself without entering error state. Sends a Discord alert
   # so the user knows a retry will be attempted.
+  # 10-minute cooldown prevents spam during rapid firmware retry storms (e.g.
+  # repeated RTK failures where the mower starts and aborts every few seconds).
   # ---------------------------------------------------------------------------
   - alias: "Mower - Notify Aborted Early"
     id: mower_notify_aborted_early
@@ -897,6 +907,10 @@ automation:
           {{ started > 0
              and (started | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
              and (now().timestamp() - started) <= 300 }}
+      - condition: template
+        value_template: >
+          {% set last = states('input_datetime.mower_last_abort_notified') | as_timestamp(0) %}
+          {{ (now().timestamp() - last) > 600 }}
     actions:
       - action: system_log.write
         data:
@@ -906,6 +920,11 @@ automation:
             battery={{ states('sensor.dave_iii_battery') }}%
             duration={{ ((now().timestamp() - states('input_datetime.mower_started_at') | as_timestamp(0)) / 60) | int }} min
             started_at={{ states('input_datetime.mower_started_at') }}
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.mower_last_abort_notified
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
       - action: rest_command.discord_webhook
         data:
           content: >-

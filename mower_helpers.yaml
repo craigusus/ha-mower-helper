@@ -1376,7 +1376,7 @@ automation:
             data:
               notification_id: mower_update_config
               title: "✅ Mower Config Updated"
-              message: "mower_helpers.yaml downloaded from GitHub. Reloading HA config..."
+              message: "Updated mower config downloaded. Reloading HA config..."
           - delay: "00:00:02"
           - action: homeassistant.reload_all
         else:

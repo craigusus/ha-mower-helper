@@ -836,11 +836,7 @@ automation:
           content: >-
             {{ "**▶️ Dave III - Mowing Started**\n"
                ~ "Dave III has started mowing.\n"
-               ~ "Zone: " ~ states('sensor.dave_iii_work_area') ~ "\n"
                ~ "Battery: " ~ states('sensor.dave_iii_battery') ~ "%\n"
-               ~ "RTK: " ~ states('sensor.dave_iii_position_mode') ~ "\n"
-               ~ "Solar: " ~ (states('sensor.gw2000a_solar_radiation') | round(0)) ~ " W/m²\n"
-               ~ "Wind: " ~ (states('sensor.gw2000a_wind_speed') | round(1)) ~ " mph\n"
                ~ "Rain chance: " ~ states('sensor.mower_rain_probability') ~ "%" }}
 
 

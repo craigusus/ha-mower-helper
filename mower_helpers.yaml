@@ -122,6 +122,17 @@ input_datetime:
     has_date: true
     has_time: true
 
+input_number:
+  mower_drying_window:
+    name: "Mower - Drying Window"
+    min: 0
+    max: 8
+    step: 0.5
+    initial: 4
+    unit_of_measurement: h
+    icon: mdi:weather-sunny-off
+    mode: slider
+
 input_text:
   mower_calendar_event_time:
     name: "Mower - Calendar Event Time"
@@ -165,18 +176,20 @@ template:
           {# --- Forecast check (Met Office) --- #}
           {% set low_precip_prob = states('sensor.mower_rain_probability') | int(100) < 50 %}
 
-          {# --- Drying conditions: sun OR wind is enough, plus low humidity --- #}
-          {% set solar_ok  = states('sensor.gw2000a_solar_radiation') | float(0) > 100 %}
-          {% set wind_ok   = states('sensor.gw2000a_wind_speed') | float(0) > 4.5 %}
-          {% set low_humid = states('sensor.gw2000a_humidity') | float(100) < 88 %}
-          {% set drying_ok = (solar_ok or wind_ok) and low_humid %}
-
-          {# --- Soil moisture --- #}
-          {% set soil_ok = states('sensor.gw2000a_soil_moisture_3') | float(100) < 70 %}
-
           {# --- Post-rain lockout (2 hours after last rain) --- #}
           {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
           {% set post_rain_ok = last_rain_ts == 0 or (now().timestamp() - last_rain_ts) > 7200 %}
+
+          {# --- Drying conditions: only checked within the configured drying window after rain --- #}
+          {% set drying_window_s = states('input_number.mower_drying_window') | float(4) * 3600 %}
+          {% set recent_rain = last_rain_ts > 0 and (now().timestamp() - last_rain_ts) < drying_window_s %}
+          {% set solar_ok  = states('sensor.gw2000a_solar_radiation') | float(0) > 100 %}
+          {% set wind_ok   = states('sensor.gw2000a_wind_speed') | float(0) > 4.5 %}
+          {% set low_humid = states('sensor.gw2000a_humidity') | float(100) < 88 %}
+          {% set drying_ok = not recent_rain or ((solar_ok or wind_ok) and low_humid) %}
+
+          {# --- Soil moisture --- #}
+          {% set soil_ok = states('sensor.gw2000a_soil_moisture_3') | float(100) < 70 %}
 
           {# --- Mower battery --- #}
           {% set battery_ok = states('sensor.dave_iii_battery') | int(0) > 20 %}
@@ -205,6 +218,8 @@ template:
           {% set last_rain_ts = states('input_datetime.mower_last_rain') | as_timestamp(0) %}
           {% set mins_since_rain = ((now().timestamp() - last_rain_ts) / 60) | int if last_rain_ts > 0 else 999 %}
           {% set dry_at = (last_rain_ts + 7200) | timestamp_custom('%H:%M') if last_rain_ts > 0 else '' %}
+          {% set drying_window_s = states('input_number.mower_drying_window') | float(4) * 3600 %}
+          {% set recent_rain = last_rain_ts > 0 and (now().timestamp() - last_rain_ts) < drying_window_s %}
           {% if is_state('sensor.dave_iii_last_error_code', '1415') %}
             Hardware error 1415 — check mower
           {% elif is_state('sensor.dave_iii_visual_positioning_status', 'SIGNAL_BAD') %}
@@ -221,9 +236,9 @@ template:
             Recent rain ({{ states('sensor.gw2000a_hourly_rain_rate_piezo') | float(0) | round(1) }} mm/h) — drying
           {% elif states('sensor.mower_rain_probability') | int(100) >= 50 %}
             Rain forecast — {{ states('sensor.mower_rain_probability') }}% chance
-          {% elif not (states('sensor.gw2000a_solar_radiation') | float(0) > 100 or states('sensor.gw2000a_wind_speed') | float(0) > 4.5) %}
+          {% elif recent_rain and not (states('sensor.gw2000a_solar_radiation') | float(0) > 100 or states('sensor.gw2000a_wind_speed') | float(0) > 4.5) %}
             Poor drying — solar {{ states('sensor.gw2000a_solar_radiation') | float(0) | round(0) }} W/m², wind {{ states('sensor.gw2000a_wind_speed') | float(0) | round(1) }} mph
-          {% elif states('sensor.gw2000a_humidity') | float(100) >= 88 %}
+          {% elif recent_rain and states('sensor.gw2000a_humidity') | float(100) >= 88 %}
             Humidity too high ({{ states('sensor.gw2000a_humidity') }}%)
           {% elif states('sensor.gw2000a_soil_moisture_3') | float(100) >= 70 %}
             Soil too wet ({{ states('sensor.gw2000a_soil_moisture_3') }}%)

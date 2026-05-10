@@ -109,13 +109,15 @@ All automated and calendar triggers check these conditions before mowing:
 | Rain rate | < 0.5 mm/h |
 | Post-rain lockout | ≥ 2 hours since last rain |
 | Rain forecast | < 50% precipitation probability (Met Office) |
-| Drying (solar) | > 100 W/m², **or** |
-| Drying (wind) | > 4.5 mph |
-| Humidity | < 88% |
+| Drying (solar) | > 100 W/m², **or** — only checked within drying window |
+| Drying (wind) | > 4.5 mph — only checked within drying window |
+| Humidity | < 88% — only checked within drying window |
 | Soil moisture | < 70% (`sensor.gw2000a_soil_moisture_3`) |
 | Battery | > 20% |
 | Error code | Not 1415 (Mammotion empty path error) |
 | Visual positioning | Not `SIGNAL_BAD` |
+
+The **drying window** (`input_number.mower_drying_window`, default 4 h) controls how long after the last detected rain the drying/humidity checks remain active. Set to 0 to disable them entirely; set to 8 for a longer post-rain restriction on poor drying days.
 
 Wind speed thresholds assume **mph**. 4.5 mph ≈ 2 m/s (light breeze).
 

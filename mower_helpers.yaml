@@ -262,6 +262,8 @@ template:
         state: >
           {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
             Holiday Mode
+          {% elif is_state('input_boolean.mower_do_not_mow_today', 'on') %}
+            Skipping today
           {% else %}
             {% set mow_days = states('sensor.mower_mow_days') | from_json %}
             {% set t = states('input_datetime.mower_start_time') %}

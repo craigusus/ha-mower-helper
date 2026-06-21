@@ -1419,7 +1419,7 @@ automation:
 
 
   # ---------------------------------------------------------------------------
-  # 22. CANCEL AND RETURN
+  # 23. CANCEL AND RETURN
   # Cancels the current mower task then docks it after a short delay.
   # ---------------------------------------------------------------------------
   - alias: "Mower - Cancel and Return"

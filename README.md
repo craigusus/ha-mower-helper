@@ -135,6 +135,16 @@ When Holiday Mode is on, `sensor.mower_next_scheduled` displays "Holiday Mode" i
 
 Toggle `input_boolean.mower_do_not_mow_today` to suppress the scheduled mow and all 30-minute retries for the rest of the day. Useful when you've manually cancelled a task and don't want it restarting. The flag resets automatically at midnight (alongside the calendar mow flag in automation 18). Mow Now and Can I Mow? are not affected.
 
+When Do Not Mow Today is on, `sensor.mower_next_scheduled` displays "Skipping today" instead of the next scheduled time.
+
+---
+
+## Cancel and Return
+
+Press `input_button.mower_cancel_and_return` to immediately cancel whatever the mower is doing and send it back to the dock. The button is always visible on the dashboard regardless of mower state.
+
+The automation cancels the current task via `button.dave_iii_cancel_current_task`, waits 5 seconds, then issues a dock command.
+
 ---
 
 ## Notifications (Discord)
@@ -178,7 +188,7 @@ Use these read-only template sensors on cards instead of the raw input helpers:
 
 | Sensor | Example value | Description |
 |---|---|---|
-| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable); shows `Retrying — today until HH:MM` while retries are active |
+| `sensor.mower_next_scheduled` | `09:30 Tue 1 Apr` | Next scheduled mow time (human-readable); shows `Retrying — today until HH:MM` while retries are active; shows `Holiday Mode` when holiday mode is on; shows `Skipping today` when Do Not Mow Today is on |
 | `sensor.mower_next_scheduled_iso` | `2026-04-10T09:30:00` | Next scheduled mow time (ISO format, for TimeFlow Card) |
 | `sensor.mower_estimated_finish` | `2026-04-08T11:45:00` | Estimated mow finish time based on `sensor.dave_iii_time_left` (ISO format, only set while mowing) |
 | `sensor.mower_last_completed_formatted` | `14:22 Sat 29 Mar` | Last completed mow time (human-readable) |
@@ -228,3 +238,4 @@ The following are outside the control of this package and depend on the Mammotio
 | 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |
 | 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when a stale GATT handle error is detected — triggers on `WARNING` from `pymammotion.transport.ble` (patched fork) or `ERROR` from `pymammotion.messaging.command_queue` (upstream); 10-minute cooldown prevents repeated reboots |
 | 22 | Mower - Update Config from GitHub | Downloads `mower_helpers.yaml` from the URL in `mower_update_command` secret and reloads all HA config sections without a full restart |
+| 23 | Mower - Cancel and Return | Cancels the current mower task via `button.dave_iii_cancel_current_task`, waits 5 seconds, then docks |

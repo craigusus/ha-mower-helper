@@ -299,7 +299,7 @@ template:
           {% endif %}
         attributes:
           iso: >
-            {% if is_state('input_boolean.mower_holiday_mode', 'on') %}
+            {% if is_state('input_boolean.mower_holiday_mode', 'on') or is_state('input_boolean.mower_do_not_mow_today', 'on') %}
               unknown
             {% else %}
               {% set mow_days = states('sensor.mower_mow_days') | from_json %}

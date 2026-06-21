@@ -131,6 +131,12 @@ When Holiday Mode is on, `sensor.mower_next_scheduled` displays "Holiday Mode" i
 
 ---
 
+## Do Not Mow Today
+
+Toggle `input_boolean.mower_do_not_mow_today` to suppress the scheduled mow and all 30-minute retries for the rest of the day. Useful when you've manually cancelled a task and don't want it restarting. The flag resets automatically at midnight (alongside the calendar mow flag in automation 18). Mow Now and Can I Mow? are not affected.
+
+---
+
 ## Notifications (Discord)
 
 Discord notifications are sent for all events via webhook (see [Secrets](#secrets)).
@@ -217,7 +223,7 @@ The following are outside the control of this package and depend on the Mammotio
 | 15 | Mower - Update Calendar Event Duration | Creates accurate calendar event on completion (>5 min run only) |
 | 16 | Mower - Sync Scheduled Calendar Placeholder | Keeps next scheduled mow on calendar; queries calendar via `calendar.get_events` to prevent duplicate placeholders |
 | 17 | Mower - Calendar Triggered Mow | Fires on calendar events with "mow" in title (excluding "Dave III - Mow Scheduled") |
-| 18 | Mower - Clear Calendar Mow Flag | Clears retry flag at midnight |
+| 18 | Mower - Clear Calendar Mow Flag | Clears calendar retry flag and Do Not Mow Today flag at midnight |
 | 19 | Mower - Notify Blade Maintenance Due | Discord alert once when blade time reaches the mower's warn threshold |
 | 20 | Mower - Reset Blade Maintenance Flag | Clears the blade alert flag when blade time resets to near zero after replacement |
 | 21 | Mower - Reboot BLE Proxy on GATT Error | Reboots the ESPHome Bluetooth proxy when a stale GATT handle error is detected — triggers on `WARNING` from `pymammotion.transport.ble` (patched fork) or `ERROR` from `pymammotion.messaging.command_queue` (upstream); 10-minute cooldown prevents repeated reboots |

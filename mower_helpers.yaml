@@ -76,6 +76,10 @@ input_boolean:
     name: "Mower - Blade Maintenance Warned"
     icon: mdi:alert-circle-outline
 
+  mower_do_not_mow_today:
+    name: "Mower - Do Not Mow Today"
+    icon: mdi:cancel
+
 input_button:
   mower_mow_now:
     name: "Mower - Mow Now"
@@ -386,6 +390,9 @@ automation:
         entity_id: input_boolean.mower_holiday_mode
         state: "off"
       - condition: state
+        entity_id: input_boolean.mower_do_not_mow_today
+        state: "off"
+      - condition: state
         entity_id: binary_sensor.mower_ok_to_mow
         state: "on"
       - condition: state
@@ -456,6 +463,9 @@ automation:
           {{ after_start and before_end }}
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.mower_do_not_mow_today
         state: "off"
       - condition: state
         entity_id: binary_sensor.mower_ok_to_mow
@@ -1249,9 +1259,13 @@ automation:
           message: >
             MOWER | Clear Calendar Mow Flag | TRIGGERED |
             flag_was={{ states('input_boolean.mower_calendar_mow_requested') }}
+            do_not_mow_was={{ states('input_boolean.mower_do_not_mow_today') }}
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.mower_calendar_mow_requested
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.mower_do_not_mow_today
 
 
   # ---------------------------------------------------------------------------

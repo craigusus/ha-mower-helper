@@ -93,6 +93,10 @@ input_button:
     name: "Mower - Update Config"
     icon: mdi:cloud-download-outline
 
+  mower_cancel_and_return:
+    name: "Mower - Cancel and Return"
+    icon: mdi:stop-circle-outline
+
 input_datetime:
   mower_last_completed:
     name: "Mower - Last Completed"
@@ -1412,3 +1416,26 @@ automation:
               notification_id: mower_update_config
               title: "❌ Mower Config Update Failed"
               message: "Failed to download mower_helpers.yaml. Check the mower_update_command secret and HA logs."
+
+
+  # ---------------------------------------------------------------------------
+  # 22. CANCEL AND RETURN
+  # Cancels the current mower task then docks it after a short delay.
+  # ---------------------------------------------------------------------------
+  - alias: "Mower - Cancel and Return"
+    id: mower_cancel_and_return
+    triggers:
+      - trigger: state
+        entity_id: input_button.mower_cancel_and_return
+    actions:
+      - action: system_log.write
+        data:
+          level: warning
+          message: "MOWER | Cancel and Return | TRIGGERED"
+      - action: button.press
+        target:
+          entity_id: button.dave_iii_cancel_current_task
+      - delay: "00:00:05"
+      - action: lawn_mower.dock
+        target:
+          entity_id: lawn_mower.dave_iii

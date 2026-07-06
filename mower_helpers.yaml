@@ -269,7 +269,7 @@ template:
           {% elif is_state('input_boolean.mower_do_not_mow_today', 'on') %}
             Skipping today
           {% else %}
-            {% set mow_days = states('sensor.mower_mow_days') | from_json %}
+            {% set mow_days = states('sensor.mower_mow_days') | from_json([]) %}
             {% set t = states('input_datetime.mower_start_time') %}
             {% set mow_hour = t[0:2] | int %}
             {% set mow_minute = t[3:5] | int %}
@@ -306,7 +306,7 @@ template:
             {% if is_state('input_boolean.mower_holiday_mode', 'on') or is_state('input_boolean.mower_do_not_mow_today', 'on') %}
               unknown
             {% else %}
-              {% set mow_days = states('sensor.mower_mow_days') | from_json %}
+              {% set mow_days = states('sensor.mower_mow_days') | from_json([]) %}
               {% set t = states('input_datetime.mower_start_time') %}
               {% set mow_hour = t[0:2] | int %}
               {% set mow_minute = t[3:5] | int %}
@@ -391,7 +391,7 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ now().weekday() in (states('sensor.mower_mow_days') | from_json) }}
+          {{ now().weekday() in (states('sensor.mower_mow_days') | from_json([])) }}
       - condition: state
         entity_id: input_boolean.mower_holiday_mode
         state: "off"
@@ -455,7 +455,7 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ now().weekday() in (states('sensor.mower_mow_days') | from_json) or is_state('input_boolean.mower_calendar_mow_requested', 'on') }}
+          {{ now().weekday() in (states('sensor.mower_mow_days') | from_json([])) or is_state('input_boolean.mower_calendar_mow_requested', 'on') }}
       - condition: template
         value_template: >
           {% set t = states('input_datetime.mower_start_time') %}
@@ -1125,7 +1125,7 @@ automation:
             {% for i in range(8) %}
               {% if not ns.found %}
                 {% set candidate = now().replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=i) %}
-                {% if candidate.weekday() in (states('sensor.mower_mow_days') | from_json) and candidate > now() %}
+                {% if candidate.weekday() in (states('sensor.mower_mow_days') | from_json([])) and candidate > now() %}
                   {% set ns.found = true %}
                   {% set ns.result = candidate.strftime('%Y-%m-%dT%H:%M:%S') %}
                 {% endif %}
